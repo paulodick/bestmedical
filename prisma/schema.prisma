@@ -1,0 +1,156 @@
+// ===== Prisma schema — Best Medical (Fase 1) =====
+// PostgreSQL. Valores monetários em centavos (Int). Datas em DateTime (@db.Date).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Perfil {
+  admin
+  operador
+  visualizador
+}
+
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senhaHash String   @map("senha_hash")
+  perfil    Perfil   @default(operador)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  orcamentos Orcamento[]
+
+  @@map("usuarios")
+}
+
+model Cliente {
+  id        String   @id @default(uuid())
+  cnpj      String?  @unique
+  nome      String
+  cep       String?
+  endereco  String?
+  bairro    String?
+  cidade    String?
+  estado    String?  @db.Char(2)
+  pais      String   @default("Brasil")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contatos   Contato[]
+  orcamentos Orcamento[]
+
+  @@map("clientes")
+}
+
+model Contato {
+  id        String   @id @default(uuid())
+  clienteId String   @map("cliente_id")
+  nome      String
+  setor     String?
+  telefone  String?
+  email     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  orcamentos Orcamento[]
+
+  @@map("contatos")
+}
+
+model Orcamento {
+  id        String   @id @default(uuid())
+  numero    String   @unique
+  data      DateTime @db.Date
+
+  clienteId String  @map("cliente_id")
+  contatoId String? @map("contato_id")
+  criadoPor String? @map("criado_por")
+
+  // Snapshot (preenchido na emissão) — preserva histórico
+  clienteNomeSnap String? @map("cliente_nome_snap")
+  clienteCnpjSnap String? @map("cliente_cnpj_snap")
+  solicitanteSnap String? @map("solicitante_snap")
+  setorSnap       String? @map("setor_snap")
+  telefoneSnap    String? @map("telefone_snap")
+  emailSnap       String? @map("email_snap")
+
+  // Dados técnicos
+  modalidade      String?
+  marca           String?
+  marcaOutras     String? @map("marca_outras")
+  modelo          String?
+  numeroSerie     String? @map("numero_serie")
+  descricaoVisita String? @map("descricao_visita")
+
+  // Resumo financeiro
+  descontoPercent  Float @default(0) @map("desconto_percent")
+  numParcelas      Int   @default(1) @map("num_parcelas")
+  subtotalCentavos Int   @default(0) @map("subtotal_centavos")
+  descontoCentavos Int   @default(0) @map("desconto_centavos")
+  totalCentavos    Int   @default(0) @map("total_centavos")
+
+  // Finalização
+  observacoes String?
+  textoFinal  String? @map("texto_final")
+
+  // Status (espelha a página de Controle)
+  statusEnviado            Boolean   @default(false) @map("status_enviado")
+  statusAprovado           Boolean   @default(false) @map("status_aprovado")
+  statusRealizado          Boolean   @default(false) @map("status_realizado")
+  statusAguardandoPeca     Boolean   @default(false) @map("status_aguardando_peca")
+  statusOrdemServico       Boolean   @default(false) @map("status_ordem_servico")
+  statusPagamentoRealizado Boolean   @default(false) @map("status_pagamento_realizado")
+  enviadoEm                DateTime? @map("enviado_em")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cliente  Cliente         @relation(fields: [clienteId], references: [id])
+  contato  Contato?        @relation(fields: [contatoId], references: [id])
+  criador  Usuario?        @relation(fields: [criadoPor], references: [id])
+  itens    ItemOrcamento[]
+  parcelas Parcela[]
+
+  @@index([data])
+  @@index([clienteId])
+  @@map("orcamentos")
+}
+
+model ItemOrcamento {
+  id                String @id @default(uuid())
+  orcamentoId       String @map("orcamento_id")
+  ordem             Int    @default(0)
+  codigo            String @default("")
+  descricao         String @default("")
+  quantidade        Int    @default(1)
+  valorItemCentavos Int    @default(0) @map("valor_item_centavos")
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+
+  @@index([orcamentoId])
+  @@map("itens_orcamento")
+}
+
+model Parcela {
+  id             String    @id @default(uuid())
+  orcamentoId    String    @map("orcamento_id")
+  numero         Int
+  dataVencimento DateTime? @map("data_vencimento") @db.Date
+  valorCentavos  Int       @default(0) @map("valor_centavos")
+  pago           Boolean   @default(false)
+  pagoEm         DateTime? @map("pago_em") @db.Date
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+
+  @@index([orcamentoId])
+  @@map("parcelas")
+}
