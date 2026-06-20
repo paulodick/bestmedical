@@ -8,9 +8,12 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { OrcamentosService } from './orcamentos.service';
+import { PdfService } from './pdf/pdf.service';
 import { CreateOrcamentoDto, UpdateOrcamentoDto } from './dto/orcamento.dto';
 import {
   ListarOrcamentosDto,
@@ -22,7 +25,10 @@ import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('orcamentos')
 export class OrcamentosController {
-  constructor(private orcamentos: OrcamentosService) {}
+  constructor(
+    private orcamentos: OrcamentosService,
+    private pdf: PdfService,
+  ) {}
 
   // Próximo número sugerido — vem antes de :id para não colidir
   @Get('proximo-numero')
@@ -38,6 +44,19 @@ export class OrcamentosController {
   @Get(':id')
   get(@Param('id') id: string) {
     return this.orcamentos.get(id);
+  }
+
+  // Gera e baixa o PDF do orçamento
+  @Get(':id/pdf')
+  async pdfDownload(@Param('id') id: string, @Res() res: Response) {
+    const orc = await this.orcamentos.get(id);
+    const buffer = await this.pdf.gerar(orc);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${orc.numero || 'orcamento'}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Post()
