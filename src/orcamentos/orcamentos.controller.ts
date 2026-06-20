@@ -20,8 +20,10 @@ import {
   UpdateStatusDto,
 } from './dto/listar-orcamentos.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 
+// O JwtAuthGuard já é global; manter aqui é redundante mas inofensivo e explícito.
 @UseGuards(JwtAuthGuard)
 @Controller('orcamentos')
 export class OrcamentosController {
@@ -34,6 +36,14 @@ export class OrcamentosController {
   @Get('proximo-numero')
   async proximoNumero() {
     return { numero: await this.orcamentos.proximoNumero() };
+  }
+
+  // Buscar um orçamento pelo número exato (ex.: ORC-2026-0001).
+  // Usado pela tela de Novo Orçamento ao digitar o número (Enter/blur).
+  // Vem antes de :id para não colidir com a rota de detalhe por id.
+  @Get('por-numero/:numero')
+  buscarPorNumero(@Param('numero') numero: string) {
+    return this.orcamentos.buscarPorNumero(numero);
   }
 
   @Get()
@@ -59,26 +69,32 @@ export class OrcamentosController {
     res.end(buffer);
   }
 
+  @Roles('admin', 'operador')
   @Post()
   create(@Body() dto: CreateOrcamentoDto, @CurrentUser() user: AuthUser) {
     return this.orcamentos.create(dto, user?.id);
   }
 
+  @Roles('admin', 'operador')
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: UpdateOrcamentoDto) {
     return this.orcamentos.update(id, dto);
   }
 
+  @Roles('admin', 'operador')
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.orcamentos.updateStatus(id, dto);
   }
 
+  @Roles('admin', 'operador')
   @Post(':id/enviar')
   enviar(@Param('id') id: string) {
     return this.orcamentos.enviar(id);
   }
 
+  // Exclusão é uma ação destrutiva — restrita a administradores.
+  @Roles('admin')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.orcamentos.remove(id);

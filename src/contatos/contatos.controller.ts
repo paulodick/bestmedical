@@ -11,6 +11,7 @@ import {
 import { ContatosService } from './contatos.service';
 import { CreateContatoDto, UpdateContatoDto } from './dto/contato.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -23,6 +24,7 @@ export class ContatosController {
     return this.contatos.listByCliente(clienteId);
   }
 
+  @Roles('admin', 'operador')
   @Post('clientes/:clienteId/contatos')
   create(
     @Param('clienteId') clienteId: string,
@@ -32,11 +34,13 @@ export class ContatosController {
   }
 
   // Operações diretas no contato
+  @Roles('admin', 'operador')
   @Put('contatos/:id')
   update(@Param('id') id: string, @Body() dto: UpdateContatoDto) {
     return this.contatos.update(id, dto);
   }
 
+  @Roles('admin')
   @Delete('contatos/:id')
   remove(@Param('id') id: string) {
     return this.contatos.remove(id);

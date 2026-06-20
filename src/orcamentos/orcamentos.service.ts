@@ -355,6 +355,18 @@ export class OrcamentosService {
     return this.serialize(orc);
   }
 
+  // ===== Buscar por número exato (case-insensitive) =====
+  async buscarPorNumero(numero: string) {
+    const alvo = (numero || '').trim();
+    if (!alvo) throw new NotFoundException('Orçamento não encontrado');
+    const orc = await this.prisma.orcamento.findFirst({
+      where: { numero: { equals: alvo, mode: 'insensitive' } },
+      include: ORC_INCLUDE,
+    });
+    if (!orc) throw new NotFoundException('Orçamento não encontrado');
+    return this.serialize(orc);
+  }
+
   async remove(id: string) {
     await this.ensure(id);
     await this.prisma.orcamento.delete({ where: { id } });

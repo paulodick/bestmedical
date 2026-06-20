@@ -12,10 +12,18 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private users: UsersService) {
+    const secret = process.env.JWT_SECRET;
+    // Em produção, um segredo ausente é um erro crítico de configuração:
+    // não permitimos cair no fallback inseguro 'dev-secret'.
+    if (!secret && process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'JWT_SECRET não definido em produção. Configure a variável de ambiente.',
+      );
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'dev-secret',
+      secretOrKey: secret || 'dev-secret',
     });
   }
 
