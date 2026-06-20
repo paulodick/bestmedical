@@ -27,6 +27,21 @@ services:
         value: admin123
       - key: SEED_ADMIN_NOME
         value: Administrador
+      # ===== E-mail (SMTP) — preencha no painel do Render =====
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        value: chamados@bestmedical.com.br
+      - key: MAIL_FROM_NAME
+        value: Best Medical
+      - key: MAIL_CC
+        value: chamados@bestmedical.com.br
 
 databases:
   - name: bestmedical-db

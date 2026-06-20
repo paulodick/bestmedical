@@ -7,6 +7,7 @@ import { ClientesModule } from './clientes/clientes.module';
 import { ContatosModule } from './contatos/contatos.module';
 import { OrcamentosModule } from './orcamentos/orcamentos.module';
 import { CepModule } from './cep/cep.module';
+import { EmailModule } from './email/email.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -19,6 +20,7 @@ import { HealthController } from './health.controller';
     ContatosModule,
     OrcamentosModule,
     CepModule,
+    EmailModule,
   ],
   controllers: [HealthController],
 })

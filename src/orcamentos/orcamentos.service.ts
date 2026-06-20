@@ -17,6 +17,9 @@ import {
   reaisParaCentavos,
   ParcelaCalc,
 } from './orcamento.calc';
+import { PdfService } from './pdf/pdf.service';
+import { EmailService } from '../email/email.service';
+import { montarEmailOrcamento } from '../email/email.template';
 
 const TEXTO_FINAL_PADRAO =
   'Orçamento válido por 15 dias. Qualquer alteração no escopo do serviço poderá alterar os itens e/ou valores listados nesta proposta.';
@@ -31,7 +34,11 @@ const ORC_INCLUDE = {
 
 @Injectable()
 export class OrcamentosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pdf: PdfService,
+    private email: EmailService,
+  ) {}
 
   // ===== Próximo número: ORC-{ano}-{seq} =====
   async proximoNumero(): Promise<string> {
@@ -354,17 +361,58 @@ export class OrcamentosService {
     return { ok: true };
   }
 
-  // ===== Marca como enviado (Fase 1: apenas atualiza status) =====
+  // ===== Enviar por e-mail (gera PDF, envia ao solicitante com cópia) =====
   async enviar(id: string) {
     await this.ensure(id);
+    const dados = await this.get(id); // serializado (formato do front)
+
+    const destinatario = (dados.email || '').trim();
+    if (!destinatario) {
+      return {
+        ok: false,
+        mensagem:
+          'O orçamento não tem e-mail do solicitante. Preencha o campo E-mail para enviar.',
+      };
+    }
+
+    if (!this.email.configurado) {
+      return {
+        ok: false,
+        mensagem:
+          'Envio de e-mail ainda não configurado no servidor (SMTP). O orçamento não foi enviado.',
+      };
+    }
+
+    // Gera o PDF e monta o e-mail
+    const pdf = await this.pdf.gerar(dados);
+    const { assunto, html } = montarEmailOrcamento(dados);
+
+    try {
+      await this.email.enviar({
+        para: destinatario,
+        assunto,
+        html,
+        anexoPdf: { nome: `${dados.numero || 'orcamento'}.pdf`, conteudo: pdf },
+      });
+    } catch (e) {
+      return {
+        ok: false,
+        mensagem:
+          'Falha ao enviar o e-mail: ' +
+          (e instanceof Error ? e.message : 'erro desconhecido'),
+      };
+    }
+
+    // Marca como enviado
     const orc = await this.prisma.orcamento.update({
       where: { id },
       data: { statusEnviado: true, enviadoEm: new Date() },
       include: ORC_INCLUDE,
     });
+
     return {
       ok: true,
-      mensagem: 'Orçamento marcado como enviado.',
+      mensagem: `Orçamento enviado para ${destinatario} (cópia para controle).`,
       orcamento: this.serialize(orc),
     };
   }
