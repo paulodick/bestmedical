@@ -129,19 +129,19 @@ export class PdfService {
           width: '*',
           stack: [
             { text: 'CLIENTE', fontSize: 8, bold: true, color: SLATE400, characterSpacing: 0.5 },
-            { text: o.empresa || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0], lineHeight: 1.35 },
-            ...(o.cnpj ? [{ text: `CNPJ: ${o.cnpj}`, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
-            ...enderecoLinhas.map((l) => ({ text: l, color: SLATE600, fontSize: 10, lineHeight: 1.35 })),
+            { text: o.empresa || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0], lineHeight: 1.2 },
+            ...(o.cnpj ? [{ text: `CNPJ: ${o.cnpj}`, color: SLATE600, fontSize: 10, lineHeight: 1.2 }] : []),
+            ...enderecoLinhas.map((l) => ({ text: l, color: SLATE600, fontSize: 10, lineHeight: 1.2 })),
           ],
         },
         {
           width: '*',
           stack: [
             { text: 'SOLICITANTE', fontSize: 8, bold: true, color: SLATE400, characterSpacing: 0.5 },
-            { text: o.solicitante || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0], lineHeight: 1.35 },
-            ...(o.setor ? [{ text: o.setor, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
-            ...(o.telefone ? [{ text: o.telefone, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
-            ...(o.email ? [{ text: o.email, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
+            { text: o.solicitante || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0], lineHeight: 1.2 },
+            ...(o.setor ? [{ text: o.setor, color: SLATE600, fontSize: 10, lineHeight: 1.2 }] : []),
+            ...(o.telefone ? [{ text: o.telefone, color: SLATE600, fontSize: 10, lineHeight: 1.2 }] : []),
+            ...(o.email ? [{ text: o.email, color: SLATE600, fontSize: 10, lineHeight: 1.2 }] : []),
           ],
         },
       ],
@@ -163,11 +163,11 @@ export class PdfService {
     // Monta um cartão (célula) para um campo do equipamento.
     const cartaoCampo = (campo: { rotulo: string; valor: string }) => ({
       stack: [
-        { text: campo.rotulo, fontSize: 7, bold: true, color: SLATE400, characterSpacing: 0.5, margin: [0, 0, 0, 2] },
+        { text: campo.rotulo, fontSize: 7, bold: true, color: SLATE400, characterSpacing: 0.5, margin: [0, 0, 0, 1] },
         { text: campo.valor, fontSize: 10, bold: true, color: SLATE900 },
       ],
       fillColor: '#f8fafc',
-      margin: [8, 6, 8, 6],
+      margin: [8, 4, 8, 4],
     });
 
     // Célula vazia (mantém o grid alinhado quando o nº de campos é ímpar).
@@ -180,7 +180,7 @@ export class PdfService {
         bold: true,
         color: SLATE400,
         characterSpacing: 0.5,
-        margin: [0, 0, 0, 6],
+        margin: [0, 0, 0, 4],
       });
 
       if (camposTec.length) {
@@ -200,10 +200,10 @@ export class PdfService {
           layout: {
             hLineWidth: () => 0,
             vLineWidth: () => 0,
-            paddingLeft: (i: number) => (i === 0 ? 0 : 4),
-            paddingRight: (i: number, node: any) => (i === node.table.widths.length - 1 ? 0 : 4),
-            paddingTop: () => 4,
-            paddingBottom: () => 4,
+            paddingLeft: (i: number) => (i === 0 ? 0 : 3),
+            paddingRight: (i: number, node: any) => (i === node.table.widths.length - 1 ? 0 : 3),
+            paddingTop: () => 2,
+            paddingBottom: () => 2,
           },
           margin: [0, 0, 0, 0],
         });
@@ -221,17 +221,17 @@ export class PdfService {
                     { text: o.descricaoVisita, fontSize: 10, color: SLATE700 },
                   ],
                   fillColor: '#f8fafc',
-                  margin: [8, 6, 8, 6],
+                  margin: [8, 4, 8, 4],
                 },
               ],
             ],
           },
           layout: 'noBorders',
-          margin: [0, 8, 0, 0],
+          margin: [0, 5, 0, 0],
         });
       }
 
-      tecnicos.push({ text: '', margin: [0, 0, 0, 12] });
+      tecnicos.push({ text: '', margin: [0, 0, 0, 8] });
     }
     content.push(...tecnicos);
 
@@ -369,7 +369,7 @@ export class PdfService {
             { text: o.observacoes, color: SLATE600 },
           ],
           fontSize: 10,
-          margin: [0, 0, 0, 10],
+          margin: [0, 0, 0, 6],
         });
       if (o.textoFinal)
         obs.push({ text: o.textoFinal, color: SLATE600, fontSize: 10 });
