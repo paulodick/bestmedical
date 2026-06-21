@@ -22,7 +22,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CORS_ORIGIN
-        value: "https://bestmedical.pplx.app,http://localhost:5173"
+        value: "https://bestmedical.onrender.com,https://bestmedical.pplx.app,http://localhost:5173"
       - key: SEED_ADMIN_EMAIL
         value: admin@bestmedical.com.br
       - key: SEED_ADMIN_PASSWORD
