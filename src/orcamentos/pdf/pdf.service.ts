@@ -129,19 +129,19 @@ export class PdfService {
           width: '*',
           stack: [
             { text: 'CLIENTE', fontSize: 8, bold: true, color: SLATE400, characterSpacing: 0.5 },
-            { text: o.empresa || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0] },
-            ...(o.cnpj ? [{ text: `CNPJ: ${o.cnpj}`, color: SLATE600, fontSize: 10 }] : []),
-            ...enderecoLinhas.map((l) => ({ text: l, color: SLATE600, fontSize: 10 })),
+            { text: o.empresa || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0], lineHeight: 1.35 },
+            ...(o.cnpj ? [{ text: `CNPJ: ${o.cnpj}`, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
+            ...enderecoLinhas.map((l) => ({ text: l, color: SLATE600, fontSize: 10, lineHeight: 1.35 })),
           ],
         },
         {
           width: '*',
           stack: [
             { text: 'SOLICITANTE', fontSize: 8, bold: true, color: SLATE400, characterSpacing: 0.5 },
-            { text: o.solicitante || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0] },
-            ...(o.setor ? [{ text: o.setor, color: SLATE600, fontSize: 10 }] : []),
-            ...(o.telefone ? [{ text: o.telefone, color: SLATE600, fontSize: 10 }] : []),
-            ...(o.email ? [{ text: o.email, color: SLATE600, fontSize: 10 }] : []),
+            { text: o.solicitante || '—', bold: true, color: SLATE900, margin: [0, 2, 0, 0], lineHeight: 1.35 },
+            ...(o.setor ? [{ text: o.setor, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
+            ...(o.telefone ? [{ text: o.telefone, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
+            ...(o.email ? [{ text: o.email, color: SLATE600, fontSize: 10, lineHeight: 1.35 }] : []),
           ],
         },
       ],
@@ -150,38 +150,88 @@ export class PdfService {
     });
 
     // ===== Dados do equipamento =====
+    // Cada campo é exibido em um "cartão" próprio (rótulo em negrito acima e o
+    // valor preenchido abaixo), dispostos em duas colunas, para facilitar a
+    // leitura em vez de tudo concatenado numa única linha de texto.
     const tecnicos: Content[] = [];
-    const linhaTec: any[] = [];
-    if (o.modalidade) linhaTec.push(`Modalidade: ${o.modalidade}`);
-    if (marcaExibida) linhaTec.push(`Marca: ${marcaExibida}`);
-    if (o.modelo) linhaTec.push(`Modelo: ${o.modelo}`);
-    if (o.numeroSerie) linhaTec.push(`Nº de série: ${o.numeroSerie}`);
-    if (linhaTec.length || o.descricaoVisita) {
+    const camposTec: { rotulo: string; valor: string }[] = [];
+    if (o.modalidade) camposTec.push({ rotulo: 'MODALIDADE', valor: o.modalidade });
+    if (marcaExibida) camposTec.push({ rotulo: 'MARCA', valor: marcaExibida });
+    if (o.modelo) camposTec.push({ rotulo: 'MODELO', valor: o.modelo });
+    if (o.numeroSerie) camposTec.push({ rotulo: 'Nº DE SÉRIE', valor: o.numeroSerie });
+
+    // Monta um cartão (célula) para um campo do equipamento.
+    const cartaoCampo = (campo: { rotulo: string; valor: string }) => ({
+      stack: [
+        { text: campo.rotulo, fontSize: 7, bold: true, color: SLATE400, characterSpacing: 0.5, margin: [0, 0, 0, 2] },
+        { text: campo.valor, fontSize: 10, bold: true, color: SLATE900 },
+      ],
+      fillColor: '#f8fafc',
+      margin: [8, 6, 8, 6],
+    });
+
+    // Célula vazia (mantém o grid alinhado quando o nº de campos é ímpar).
+    const cartaoVazio = () => ({ text: '', border: [false, false, false, false] });
+
+    if (camposTec.length || o.descricaoVisita) {
       tecnicos.push({
-        table: {
-          widths: ['*'],
-          body: [
-            [
-              {
-                stack: [
-                  { text: 'DADOS DO EQUIPAMENTO', fontSize: 8, bold: true, color: SLATE400, characterSpacing: 0.5, margin: [0, 0, 0, 4] },
-                  ...(linhaTec.length
-                    ? [{ text: linhaTec.join('     '), color: SLATE700, fontSize: 10 }]
-                    : []),
-                  ...(o.descricaoVisita
-                    ? [{ text: `Descrição da visita técnica: ${o.descricaoVisita}`, color: SLATE700, fontSize: 10, margin: [0, 4, 0, 0] }]
-                    : []),
-                ],
-                fillColor: '#f8fafc',
-                margin: [10, 8, 10, 8],
-                border: [false, false, false, false],
-              },
-            ],
-          ],
-        },
-        layout: 'noBorders',
-        margin: [0, 0, 0, 12],
+        text: 'DADOS DO EQUIPAMENTO',
+        fontSize: 8,
+        bold: true,
+        color: SLATE400,
+        characterSpacing: 0.5,
+        margin: [0, 0, 0, 6],
       });
+
+      if (camposTec.length) {
+        // Agrupa os campos em linhas de 2 colunas.
+        const linhasCartoes: any[] = [];
+        for (let i = 0; i < camposTec.length; i += 2) {
+          const esquerda = cartaoCampo(camposTec[i]);
+          const direita = camposTec[i + 1] ? cartaoCampo(camposTec[i + 1]) : cartaoVazio();
+          linhasCartoes.push([esquerda, direita]);
+        }
+        tecnicos.push({
+          table: {
+            widths: ['*', '*'],
+            body: linhasCartoes,
+          },
+          // Espaçamento entre os cartões (linhas e colunas).
+          layout: {
+            hLineWidth: () => 0,
+            vLineWidth: () => 0,
+            paddingLeft: (i: number) => (i === 0 ? 0 : 4),
+            paddingRight: (i: number, node: any) => (i === node.table.widths.length - 1 ? 0 : 4),
+            paddingTop: () => 4,
+            paddingBottom: () => 4,
+          },
+          margin: [0, 0, 0, 0],
+        });
+      }
+
+      if (o.descricaoVisita) {
+        tecnicos.push({
+          table: {
+            widths: ['*'],
+            body: [
+              [
+                {
+                  stack: [
+                    { text: 'DESCRIÇÃO DA VISITA TÉCNICA', fontSize: 7, bold: true, color: SLATE400, characterSpacing: 0.5, margin: [0, 0, 0, 2] },
+                    { text: o.descricaoVisita, fontSize: 10, color: SLATE700 },
+                  ],
+                  fillColor: '#f8fafc',
+                  margin: [8, 6, 8, 6],
+                },
+              ],
+            ],
+          },
+          layout: 'noBorders',
+          margin: [0, 8, 0, 0],
+        });
+      }
+
+      tecnicos.push({ text: '', margin: [0, 0, 0, 12] });
     }
     content.push(...tecnicos);
 
@@ -319,7 +369,7 @@ export class PdfService {
             { text: o.observacoes, color: SLATE600 },
           ],
           fontSize: 10,
-          margin: [0, 0, 0, 2],
+          margin: [0, 0, 0, 10],
         });
       if (o.textoFinal)
         obs.push({ text: o.textoFinal, color: SLATE600, fontSize: 10 });
