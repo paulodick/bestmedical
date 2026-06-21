@@ -42,6 +42,9 @@ export class CreateOrcamentoDto {
   @IsOptional() @IsString() empresa?: string;
   @IsOptional() @IsString() cep?: string;
   @IsOptional() @IsString() endereco?: string;
+  // número e complemento do endereço (não confundir com 'numero' do orçamento)
+  @IsOptional() @IsString() enderecoNumero?: string;
+  @IsOptional() @IsString() complemento?: string;
   @IsOptional() @IsString() bairro?: string;
   @IsOptional() @IsString() cidade?: string;
   @IsOptional() @IsString() estado?: string;

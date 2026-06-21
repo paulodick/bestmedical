@@ -38,6 +38,46 @@ export class ClientesService {
     };
   }
 
+  // ===== Autocompletar por CNPJ =====
+  // Usado na tela de Novo Orçamento: ao digitar o CNPJ, devolve os dados
+  // cadastrais da empresa (endereço, número, complemento etc.) e os dados do
+  // último solicitante usado, para preencher o formulário automaticamente.
+  // Retorna null (200) quando o CNPJ ainda não existe — assim o front trata
+  // como “novo cliente” sem precisar lidar com erro 404.
+  async buscarPorCnpj(cnpjBruto: string) {
+    const cnpj = (cnpjBruto || '').trim();
+    if (!cnpj) return null;
+
+    const cliente = await this.prisma.cliente.findUnique({
+      where: { cnpj },
+      include: {
+        // contato mais recente para sugerir solicitante/setor/contato
+        contatos: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+    if (!cliente) return null;
+
+    const contato = cliente.contatos[0];
+    return {
+      encontrado: true,
+      cnpj: cliente.cnpj ?? '',
+      empresa: cliente.nome ?? '',
+      cep: cliente.cep ?? '',
+      endereco: cliente.endereco ?? '',
+      enderecoNumero: cliente.numero ?? '',
+      complemento: cliente.complemento ?? '',
+      bairro: cliente.bairro ?? '',
+      cidade: cliente.cidade ?? '',
+      estado: cliente.estado ?? '',
+      pais: cliente.pais ?? 'Brasil',
+      // dados do último solicitante (editáveis no front)
+      solicitante: contato?.nome ?? '',
+      setor: contato?.setor ?? '',
+      telefone: contato?.telefone ?? '',
+      email: contato?.email ?? '',
+    };
+  }
+
   async get(id: string) {
     const cliente = await this.prisma.cliente.findUnique({
       where: { id },

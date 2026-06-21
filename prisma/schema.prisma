@@ -33,14 +33,16 @@ model Usuario {
 
 model Cliente {
   id        String   @id @default(uuid())
-  cnpj      String?  @unique
-  nome      String
-  cep       String?
-  endereco  String?
-  bairro    String?
-  cidade    String?
-  estado    String?  @db.Char(2)
-  pais      String   @default("Brasil")
+  cnpj        String?  @unique
+  nome        String
+  cep         String?
+  endereco    String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String?  @db.Char(2)
+  pais        String   @default("Brasil")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

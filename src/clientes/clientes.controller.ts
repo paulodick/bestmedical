@@ -25,6 +25,14 @@ export class ClientesController {
     return this.clientes.list(q);
   }
 
+  // Autocompletar por CNPJ na tela de Novo Orçamento.
+  // Recebe o CNPJ por query (?cnpj=...) pois o valor contém “/”.
+  // Vem antes de :id para não colidir com a rota de detalhe.
+  @Get('por-cnpj')
+  buscarPorCnpj(@Query('cnpj') cnpj: string) {
+    return this.clientes.buscarPorCnpj(cnpj);
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.clientes.get(id);

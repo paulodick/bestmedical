@@ -109,7 +109,13 @@ export class PdfService {
     // ===== Cliente + Solicitante =====
     const enderecoLinhas: string[] = [];
     if (o.endereco || o.cidade) {
-      const l1 = [o.endereco, o.bairro].filter(Boolean).join(', ');
+      // Endereço, número, complemento e bairro na primeira linha.
+      const ruaNumero = [o.endereco, o.enderecoNumero]
+        .filter(Boolean)
+        .join(', ');
+      const l1 = [ruaNumero, o.complemento, o.bairro]
+        .filter(Boolean)
+        .join(' - ');
       const l2 =
         [o.cidade, o.estado].filter(Boolean).join(' - ') +
         (o.cep ? ` — CEP ${o.cep}` : '');

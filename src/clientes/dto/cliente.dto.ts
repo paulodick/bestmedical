@@ -12,6 +12,8 @@ export class CreateClienteDto {
 
   @IsOptional() @IsString() @MaxLength(9) cep?: string;
   @IsOptional() @IsString() @MaxLength(200) endereco?: string;
+  @IsOptional() @IsString() @MaxLength(30) numero?: string;
+  @IsOptional() @IsString() @MaxLength(120) complemento?: string;
   @IsOptional() @IsString() @MaxLength(120) bairro?: string;
   @IsOptional() @IsString() @MaxLength(120) cidade?: string;
   @IsOptional() @IsString() @Length(2, 2) estado?: string;

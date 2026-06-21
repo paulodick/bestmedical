@@ -68,18 +68,31 @@ export class OrcamentosService {
         ? await this.prisma.cliente.findUnique({ where: { cnpj } })
         : null;
 
+      // Dados de cadastro vindos do formulário. Só sobrescrevem o que veio
+      // preenchido — assim não apagamos um dado salvo se o campo vier vazio.
+      const dadosCadastro = {
+        nome: dto.empresa || cliente?.nome || 'Cliente sem nome',
+        cep: dto.cep ?? cliente?.cep ?? null,
+        endereco: dto.endereco ?? cliente?.endereco ?? null,
+        numero: dto.enderecoNumero ?? cliente?.numero ?? null,
+        complemento: dto.complemento ?? cliente?.complemento ?? null,
+        bairro: dto.bairro ?? cliente?.bairro ?? null,
+        cidade: dto.cidade ?? cliente?.cidade ?? null,
+        estado: dto.estado ?? cliente?.estado ?? null,
+        pais: dto.pais || cliente?.pais || 'Brasil',
+      };
+
       if (!cliente) {
+        // Primeiro orçamento desse CNPJ: cria o cadastro do cliente.
         cliente = await this.prisma.cliente.create({
-          data: {
-            cnpj: cnpj || null,
-            nome: dto.empresa || 'Cliente sem nome',
-            cep: dto.cep,
-            endereco: dto.endereco,
-            bairro: dto.bairro,
-            cidade: dto.cidade,
-            estado: dto.estado,
-            pais: dto.pais || 'Brasil',
-          },
+          data: { cnpj: cnpj || null, ...dadosCadastro },
+        });
+      } else {
+        // Já existe: mantém o cadastro atualizado com os dados mais recentes
+        // informados na emissão (endereço, número, complemento etc.).
+        cliente = await this.prisma.cliente.update({
+          where: { id: cliente.id },
+          data: dadosCadastro,
         });
       }
       clienteId = cliente.id;
@@ -196,13 +209,37 @@ export class OrcamentosService {
 
   // ===== Atualizar (substitui itens e parcelas) =====
   async update(id: string, dto: UpdateOrcamentoDto) {
-    await this.ensure(id);
+    const atual = await this.ensure(id);
     const { totais, parcelas } = this.montarDados(dto);
 
     const orc = await this.prisma.$transaction(async (tx) => {
       // remove filhos e recria (estratégia simples e previsível)
       await tx.itemOrcamento.deleteMany({ where: { orcamentoId: id } });
       await tx.parcela.deleteMany({ where: { orcamentoId: id } });
+
+      // Mantém o cadastro do cliente vinculado atualizado com os dados de
+      // endereço mais recentes (endereço, número, complemento etc.) — assim
+      // o autocompletar por CNPJ sempre reflete a última edição.
+      if (atual?.clienteId) {
+        await tx.cliente.update({
+          where: { id: atual.clienteId },
+          data: {
+            ...(dto.empresa ? { nome: dto.empresa } : {}),
+            ...(dto.cep !== undefined ? { cep: dto.cep } : {}),
+            ...(dto.endereco !== undefined ? { endereco: dto.endereco } : {}),
+            ...(dto.enderecoNumero !== undefined
+              ? { numero: dto.enderecoNumero }
+              : {}),
+            ...(dto.complemento !== undefined
+              ? { complemento: dto.complemento }
+              : {}),
+            ...(dto.bairro !== undefined ? { bairro: dto.bairro } : {}),
+            ...(dto.cidade !== undefined ? { cidade: dto.cidade } : {}),
+            ...(dto.estado !== undefined ? { estado: dto.estado } : {}),
+            ...(dto.pais ? { pais: dto.pais } : {}),
+          },
+        });
+      }
 
       return tx.orcamento.update({
         where: { id },
@@ -432,6 +469,7 @@ export class OrcamentosService {
   private async ensure(id: string) {
     const o = await this.prisma.orcamento.findUnique({ where: { id } });
     if (!o) throw new NotFoundException('Orçamento não encontrado');
+    return o;
   }
 
   // ===== Serializa para o formato esperado pelo front (reais, ISO, campos planos) =====
@@ -447,6 +485,8 @@ export class OrcamentosService {
       empresa: o.clienteNomeSnap ?? o.cliente?.nome ?? '',
       cep: o.cliente?.cep ?? '',
       endereco: o.cliente?.endereco ?? '',
+      enderecoNumero: o.cliente?.numero ?? '',
+      complemento: o.cliente?.complemento ?? '',
       bairro: o.cliente?.bairro ?? '',
       cidade: o.cliente?.cidade ?? '',
       estado: o.cliente?.estado ?? '',
