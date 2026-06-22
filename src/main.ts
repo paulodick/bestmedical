@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -8,6 +9,13 @@ async function bootstrap() {
 
   // Prefixo global da API
   app.setGlobalPrefix('api/v1');
+
+  // ===== Limite do corpo da requisição =====
+  // A importação de contatos do CRM (vCard .vcf) pode enviar arquivos
+  // grandes (agendas com muitos contatos). O padrão do Express é 100kb,
+  // o que causava erro "arquivo muito grande" (413). Elevamos para 25mb.
+  app.use(json({ limit: '25mb' }));
+  app.use(urlencoded({ limit: '25mb', extended: true }));
 
   // ===== Segurança de cabeçalhos HTTP =====
   app.use(helmet());
