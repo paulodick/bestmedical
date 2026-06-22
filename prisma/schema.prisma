@@ -80,6 +80,9 @@ model CrmContato {
   email           String?
   // Relacionamento: 1 (sem relacionamento) a 5 (excelente). Default 1.
   relacionamento  Int      @default(1)
+  // Pessoal: marca contatos pessoais (não profissionais). Continua no banco,
+  // mas pode ser ocultado por filtro na tela do CRM.
+  pessoal         Boolean  @default(false)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

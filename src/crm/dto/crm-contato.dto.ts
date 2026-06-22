@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsInt,
   IsOptional,
@@ -25,6 +26,9 @@ export class CreateCrmContatoDto {
   // Relacionamento: 1 a 5. Default 1 quando não informado.
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5)
   relacionamento?: number;
+
+  // Pessoal: marca contato como pessoal (não profissional).
+  @IsOptional() @IsBoolean() pessoal?: boolean;
 }
 
 export class UpdateCrmContatoDto extends CreateCrmContatoDto {}
