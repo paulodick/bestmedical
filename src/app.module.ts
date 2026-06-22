@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { ContatosModule } from './contatos/contatos.module';
+import { CrmModule } from './crm/crm.module';
 import { OrcamentosModule } from './orcamentos/orcamentos.module';
 import { CepModule } from './cep/cep.module';
 import { EmailModule } from './email/email.module';
@@ -29,6 +30,7 @@ import { RolesGuard } from './auth/roles.guard';
     UsersModule,
     ClientesModule,
     ContatosModule,
+    CrmModule,
     OrcamentosModule,
     CepModule,
     EmailModule,

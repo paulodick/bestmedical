@@ -68,6 +68,24 @@ model Contato {
   @@map("contatos")
 }
 
+// ===== CRM — agenda de contatos independente =====
+// Lista de contatos importada do celular (vCard/CSV) ou cadastrada à mão.
+// Não tem relação com Cliente/Orçamento: é uma agenda comercial própria.
+model CrmContato {
+  id              String   @id @default(uuid())
+  nome            String
+  empresa         String?
+  telefone        String?
+  telefonePessoal String?  @map("telefone_pessoal")
+  email           String?
+  // Relacionamento: 1 (sem relacionamento) a 5 (excelente). Default 1.
+  relacionamento  Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("crm_contatos")
+}
+
 model Orcamento {
   id        String   @id @default(uuid())
   numero    String   @unique
