@@ -29,7 +29,12 @@ services:
         value: admin123
       - key: SEED_ADMIN_NOME
         value: Administrador
-      # ===== E-mail (SMTP) — preencha no painel do Render =====
+      # ===== E-mail — preencha no painel do Render =====
+      # Preferencial: API HTTP do Brevo (contorna o bloqueio de portas
+      # SMTP de saida no plano free do Render). Se BREVO_API_KEY estiver
+      # definido, o envio usa o Brevo; caso contrario, usa o SMTP abaixo.
+      - key: BREVO_API_KEY
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

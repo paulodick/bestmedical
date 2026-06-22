@@ -12,11 +12,123 @@ export interface EnvioEmail {
 export class EmailService {
   private readonly logger = new Logger('EmailService');
 
-  // Indica se o e-mail está configurado (há host SMTP)
-  get configurado(): boolean {
-    return !!process.env.SMTP_HOST;
+  // ===== Configuração =====
+  // Preferimos a API HTTP do Brevo (contorna o bloqueio de portas SMTP
+  // de saída no Render free) e, na ausência dela, caímos no SMTP direto
+  // via nodemailer (útil em ambiente local ou em planos pagos do Render).
+
+  private get usaBrevo(): boolean {
+    return !!process.env.BREVO_API_KEY;
   }
 
+  // Indica se o e-mail está configurado (Brevo OU SMTP)
+  get configurado(): boolean {
+    return this.usaBrevo || !!process.env.SMTP_HOST;
+  }
+
+  // Remetente: endereço + nome
+  private get remetenteEmail(): string {
+    return (
+      process.env.MAIL_FROM ||
+      process.env.SMTP_USER ||
+      'no-reply@bestmedical.com.br'
+    );
+  }
+
+  private get remetenteNome(): string {
+    return process.env.MAIL_FROM_NAME || 'Best Medical';
+  }
+
+  // Remetente formatado para o nodemailer ("Nome" <email>)
+  private get remetenteSmtp(): string {
+    const from = this.remetenteEmail;
+    const nome = this.remetenteNome;
+    return from ? `"${nome}" <${from}>` : nome;
+  }
+
+  // CC fixo (cópia de controle), ex.: paulo@bestmedical.com.br
+  private get copia(): string | undefined {
+    return process.env.MAIL_CC || undefined;
+  }
+
+  async enviar(msg: EnvioEmail): Promise<{ ok: boolean; id?: string }> {
+    if (!this.configurado) {
+      throw new Error(
+        'Envio de e-mail não configurado (defina BREVO_API_KEY ou SMTP_HOST/USER/PASS).',
+      );
+    }
+
+    if (this.usaBrevo) {
+      return this.enviarViaBrevo(msg);
+    }
+    return this.enviarViaSmtp(msg);
+  }
+
+  // ===== Envio via API HTTP do Brevo =====
+  private async enviarViaBrevo(
+    msg: EnvioEmail,
+  ): Promise<{ ok: boolean; id?: string }> {
+    const apiKey = process.env.BREVO_API_KEY as string;
+
+    const payload: Record<string, unknown> = {
+      sender: { email: this.remetenteEmail, name: this.remetenteNome },
+      to: [{ email: msg.para }],
+      subject: msg.assunto,
+      htmlContent: msg.html,
+    };
+
+    const cc = this.copia;
+    if (cc) {
+      payload.cc = [{ email: cc }];
+    }
+
+    if (msg.anexoPdf) {
+      payload.attachment = [
+        {
+          name: msg.anexoPdf.nome,
+          content: msg.anexoPdf.conteudo.toString('base64'),
+        },
+      ];
+    }
+
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      throw new Error(
+        'Não foi possível conectar à API do Brevo: ' +
+          (e instanceof Error ? e.message : 'erro de rede'),
+      );
+    }
+
+    if (!resp.ok) {
+      const texto = await resp.text().catch(() => '');
+      throw new Error(
+        `Brevo retornou ${resp.status}: ${texto || resp.statusText}`,
+      );
+    }
+
+    let id: string | undefined;
+    try {
+      const data = (await resp.json()) as { messageId?: string };
+      id = data?.messageId;
+    } catch {
+      // resposta sem corpo JSON — tudo bem, o status já foi 2xx
+    }
+
+    this.logger.log(`E-mail enviado via Brevo: ${id ?? '(sem id)'} -> ${msg.para}`);
+    return { ok: true, id };
+  }
+
+  // ===== Envio via SMTP direto (nodemailer) =====
   private criarTransporter() {
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
     return nodemailer.createTransport({
@@ -31,28 +143,13 @@ export class EmailService {
     });
   }
 
-  // Remetente padrão (nome + endereço)
-  private get remetente(): string {
-    const from = process.env.MAIL_FROM || process.env.SMTP_USER || '';
-    const nome = process.env.MAIL_FROM_NAME || 'Best Medical';
-    return from ? `"${nome}" <${from}>` : nome;
-  }
-
-  // CC fixo (cópia de controle), ex.: chamados@bestmedical.com.br
-  private get copia(): string | undefined {
-    return process.env.MAIL_CC || undefined;
-  }
-
-  async enviar(msg: EnvioEmail): Promise<{ ok: boolean; id?: string }> {
-    if (!this.configurado) {
-      throw new Error(
-        'Envio de e-mail não configurado (defina SMTP_HOST, SMTP_USER, SMTP_PASS).',
-      );
-    }
+  private async enviarViaSmtp(
+    msg: EnvioEmail,
+  ): Promise<{ ok: boolean; id?: string }> {
     const transporter = this.criarTransporter();
 
     const info = await transporter.sendMail({
-      from: this.remetente,
+      from: this.remetenteSmtp,
       to: msg.para,
       cc: this.copia,
       subject: msg.assunto,
@@ -68,7 +165,7 @@ export class EmailService {
         : [],
     });
 
-    this.logger.log(`E-mail enviado: ${info.messageId} -> ${msg.para}`);
+    this.logger.log(`E-mail enviado via SMTP: ${info.messageId} -> ${msg.para}`);
     return { ok: true, id: info.messageId };
   }
 }
