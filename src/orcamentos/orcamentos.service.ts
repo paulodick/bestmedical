@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -20,6 +20,7 @@ import {
 import { PdfService } from './pdf/pdf.service';
 import { EmailService } from '../email/email.service';
 import { montarEmailOrcamento } from '../email/email.template';
+import { OrdensServicoService } from '../ordens-servico/ordens-servico.service';
 
 const TEXTO_FINAL_PADRAO =
   'Orçamento válido por 15 dias. Qualquer alteração no escopo do serviço poderá alterar os itens e/ou valores listados nesta proposta.';
@@ -38,6 +39,9 @@ export class OrcamentosService {
     private prisma: PrismaService,
     private pdf: PdfService,
     private email: EmailService,
+    // forwardRef evita dependência circular entre os módulos
+    @Inject(forwardRef(() => OrdensServicoService))
+    private ordensServico: OrdensServicoService,
   ) {}
 
   // ===== Próximo número: ORC-{ano}-{seq} =====
@@ -293,6 +297,13 @@ export class OrcamentosService {
       });
     });
 
+    // Cria a OS automaticamente se o orçamento foi aprovado
+    if ((orc as any).statusAprovado) {
+      this.ordensServico.criarAPartirDoOrcamento(id).catch(() => {
+        // Não bloqueia a resposta — idempotente
+      });
+    }
+
     return this.serialize(orc);
   }
 
@@ -318,6 +329,14 @@ export class OrcamentosService {
       data,
       include: ORC_INCLUDE,
     });
+
+    // Cria a OS automaticamente na primeira vez que o orçamento for aprovado
+    if (orc.statusAprovado) {
+      this.ordensServico.criarAPartirDoOrcamento(id).catch(() => {
+        // Não bloqueia a resposta do status — a OS pode ser criada depois
+      });
+    }
+
     return this.serialize(orc);
   }
 

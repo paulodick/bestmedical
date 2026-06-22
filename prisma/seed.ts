@@ -17,6 +17,21 @@ async function main() {
   });
   console.log(`Usuário admin pronto: ${admin.email} (senha: ${senha})`);
 
+  // Usuário Paulo — único com acesso ao CRM (controle no frontend).
+  const pauloEmail = 'paulo@bestmedical.com.br';
+  const pauloSenhaHash = await bcrypt.hash('Abcd123a', 10);
+  const paulo = await prisma.usuario.upsert({
+    where: { email: pauloEmail },
+    update: { senhaHash: pauloSenhaHash, ativo: true, perfil: 'admin' },
+    create: {
+      nome: 'Paulo',
+      email: pauloEmail,
+      senhaHash: pauloSenhaHash,
+      perfil: 'admin',
+    },
+  });
+  console.log(`Usuário Paulo pronto: ${paulo.email}`);
+
   // Cliente de exemplo (opcional)
   const total = await prisma.cliente.count();
   if (total === 0) {

@@ -6,6 +6,10 @@ export interface EnvioEmail {
   assunto: string;
   html: string;
   anexoPdf?: { nome: string; conteudo: Buffer };
+  // Múltiplos destinatários (quando presente, substitui 'para' como lista To)
+  paraVarios?: string[];
+  // CCs extras além do MAIL_CC do servidor (por ex. paulo@bestmedical.com.br)
+  ccExtra?: string[];
 }
 
 @Injectable()
@@ -51,6 +55,15 @@ export class EmailService {
     return process.env.MAIL_CC || undefined;
   }
 
+  // Monta a lista de CCs: MAIL_CC + ccExtra, deduplicada, sem strings vazias
+  private montarCcs(ccExtra?: string[]): string[] {
+    const lista: string[] = [];
+    if (this.copia) lista.push(this.copia);
+    if (ccExtra) lista.push(...ccExtra);
+    // Deduplica e filtra vazios
+    return [...new Set(lista.filter(Boolean))];
+  }
+
   async enviar(msg: EnvioEmail): Promise<{ ok: boolean; id?: string }> {
     if (!this.configurado) {
       throw new Error(
@@ -70,16 +83,22 @@ export class EmailService {
   ): Promise<{ ok: boolean; id?: string }> {
     const apiKey = process.env.BREVO_API_KEY as string;
 
+    // Lista de destinatários: paraVarios se fornecido, senão [para]
+    const destinatarios = msg.paraVarios && msg.paraVarios.length > 0
+      ? msg.paraVarios
+      : [msg.para];
+
     const payload: Record<string, unknown> = {
       sender: { email: this.remetenteEmail, name: this.remetenteNome },
-      to: [{ email: msg.para }],
+      to: destinatarios.map((e) => ({ email: e })),
       subject: msg.assunto,
       htmlContent: msg.html,
     };
 
-    const cc = this.copia;
-    if (cc) {
-      payload.cc = [{ email: cc }];
+    // CCs unificados
+    const ccs = this.montarCcs(msg.ccExtra);
+    if (ccs.length > 0) {
+      payload.cc = ccs.map((e) => ({ email: e }));
     }
 
     if (msg.anexoPdf) {
@@ -124,7 +143,8 @@ export class EmailService {
       // resposta sem corpo JSON — tudo bem, o status já foi 2xx
     }
 
-    this.logger.log(`E-mail enviado via Brevo: ${id ?? '(sem id)'} -> ${msg.para}`);
+    const paraLog = destinatarios.join(', ');
+    this.logger.log(`E-mail enviado via Brevo: ${id ?? '(sem id)'} -> ${paraLog}`);
     return { ok: true, id };
   }
 
@@ -148,10 +168,19 @@ export class EmailService {
   ): Promise<{ ok: boolean; id?: string }> {
     const transporter = this.criarTransporter();
 
+    // Lista de destinatários: paraVarios se fornecido, senão para
+    const to = msg.paraVarios && msg.paraVarios.length > 0
+      ? msg.paraVarios.join(', ')
+      : msg.para;
+
+    // CCs unificados
+    const ccs = this.montarCcs(msg.ccExtra);
+    const cc = ccs.length > 0 ? ccs.join(', ') : undefined;
+
     const info = await transporter.sendMail({
       from: this.remetenteSmtp,
-      to: msg.para,
-      cc: this.copia,
+      to,
+      cc,
       subject: msg.assunto,
       html: msg.html,
       attachments: msg.anexoPdf
@@ -165,7 +194,7 @@ export class EmailService {
         : [],
     });
 
-    this.logger.log(`E-mail enviado via SMTP: ${info.messageId} -> ${msg.para}`);
+    this.logger.log(`E-mail enviado via SMTP: ${info.messageId} -> ${to}`);
     return { ok: true, id: info.messageId };
   }
 }
