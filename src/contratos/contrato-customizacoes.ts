@@ -14,6 +14,15 @@ export const MARCADOR_INICIO =
   '===== CUSTOMIZAÇÕES DAS CONDIÇÕES (automático) =====';
 export const MARCADOR_FIM = '===== FIM DAS CUSTOMIZAÇÕES =====';
 
+// Marcadores do bloco de customizações do CORPO DO CONTRATO. São distintos dos
+// das condições para que ambos os blocos possam coexistir nas Observações
+// Internas da proposta sem que um sobrescreva o outro (a proposta regenera o
+// bloco "DAS CONDIÇÕES" a cada update; o contrato regenera o "DO CONTRATO").
+export const MARCADOR_INICIO_CONTRATO =
+  '===== CUSTOMIZAÇÕES DO CONTRATO (automático) =====';
+export const MARCADOR_FIM_CONTRATO =
+  '===== FIM DAS CUSTOMIZAÇÕES DO CONTRATO =====';
+
 // Data no formato dd/mm/aaaa (pt-BR), para datar o registro das customizações.
 function dataBRHoje(): string {
   const d = new Date();
@@ -52,21 +61,24 @@ export function diffCondicoes(atual: string, padrao: string): string[] {
   return mudancas;
 }
 
-// Remove o bloco automático (entre marcadores) preservando o texto manual.
-function removerBloco(texto: string): string {
-  const ini = texto.indexOf(MARCADOR_INICIO);
+// Remove o bloco automático (entre os marcadores informados) preservando o
+// restante do texto (anotações manuais e demais blocos automáticos).
+function removerBloco(
+  texto: string,
+  inicio: string = MARCADOR_INICIO,
+  fim: string = MARCADOR_FIM,
+): string {
+  const ini = texto.indexOf(inicio);
   if (ini === -1) return texto.trim();
 
-  const fimIdx = texto.indexOf(MARCADOR_FIM, ini);
+  const fimIdx = texto.indexOf(fim, ini);
   if (fimIdx === -1) {
     // Marcador de fim ausente (texto corrompido): remove do início até o final.
     return texto.slice(0, ini).replace(/\s+$/, '').trim();
   }
 
   const antes = texto.slice(0, ini).replace(/\s+$/, '');
-  const depois = texto
-    .slice(fimIdx + MARCADOR_FIM.length)
-    .replace(/^\s+/, '');
+  const depois = texto.slice(fimIdx + fim.length).replace(/^\s+/, '');
   return [antes, depois].filter(Boolean).join('\n\n').trim();
 }
 
@@ -92,6 +104,36 @@ export function gerarObservacoesComCustomizacoes(
     `Customizações registradas em ${dataBRHoje()}:`,
     ...mudancas,
     MARCADOR_FIM,
+  ].join('\n');
+
+  return manual ? `${manual}\n\n${bloco}` : bloco;
+}
+
+// Versão para o CORPO DO CONTRATO: mesma lógica e formato visual, mas usando os
+// marcadores "DO CONTRATO". Compara o corpo customizado contra o snapshot do
+// corpo padrão e injeta/atualiza apenas o bloco do contrato, preservando o bloco
+// das condições e as anotações manuais.
+export function gerarObservacoesComCustomizacoesContrato(
+  corpoCustomizado: string,
+  corpoPadrao: string,
+  observacoesAtuais: string,
+): string {
+  const manual = removerBloco(
+    observacoesAtuais ?? '',
+    MARCADOR_INICIO_CONTRATO,
+    MARCADOR_FIM_CONTRATO,
+  );
+  const mudancas = diffCondicoes(corpoCustomizado ?? '', corpoPadrao ?? '');
+
+  if (mudancas.length === 0) {
+    return manual;
+  }
+
+  const bloco = [
+    MARCADOR_INICIO_CONTRATO,
+    `Customizações registradas em ${dataBRHoje()}:`,
+    ...mudancas,
+    MARCADOR_FIM_CONTRATO,
   ].join('\n');
 
   return manual ? `${manual}\n\n${bloco}` : bloco;

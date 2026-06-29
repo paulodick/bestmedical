@@ -322,10 +322,43 @@ model Proposta {
   contato      Contato?            @relation(fields: [contatoId], references: [id])
   criador      Usuario?            @relation(fields: [criadoPor], references: [id])
   equipamentos ItemPropostaEquip[]
+  contrato     Contrato?
 
   @@index([data])
   @@index([clienteId])
   @@map("propostas")
+}
+
+// ===== Contrato =====
+// Documento de contrato gerado a partir de uma Proposta aprovada (1 contrato
+// por proposta). Espelha o fluxo da Ordem de Serviço (gerada do orçamento):
+// guarda um snapshot do corpo padrão gerado a partir do template e o corpo
+// efetivamente customizado pelo usuário. As customizações (diff linha a linha
+// do corpo customizado x padrão) são replicadas nas Observações Internas da
+// PROPOSTA de origem, no mesmo formato de marcadores usado no resto do sistema.
+model Contrato {
+  id         String   @id @default(uuid())
+  numero     String   @unique // CT-2026-0001 (derivado do número da proposta)
+  propostaId String   @unique @map("proposta_id") // 1 contrato por proposta
+  data       DateTime @db.Date
+
+  // Corpo do contrato (cláusulas) em texto, uma cláusula/linha por parágrafo.
+  // conteudoPadraoSnap = versão gerada do template na criação (base do diff).
+  // conteudoCustomizado = versão editada pelo usuário (renderizada no PDF).
+  conteudoPadraoSnap  String @default("") @map("conteudo_padrao_snap") @db.Text
+  conteudoCustomizado String @default("") @map("conteudo_customizado") @db.Text
+
+  dataGeracao DateTime @default(now()) @map("data_geracao")
+
+  statusEnviado Boolean   @default(false) @map("status_enviado")
+  enviadoEm     DateTime? @map("enviado_em")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  proposta Proposta @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+
+  @@map("contratos")
 }
 
 model ItemPropostaEquip {

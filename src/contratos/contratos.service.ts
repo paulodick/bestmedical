@@ -17,6 +17,7 @@ import { EmailService } from '../email/email.service';
 import { montarEmailProposta } from './proposta-email.template';
 import { gerarObservacoesComCustomizacoes } from './contrato-customizacoes';
 import { CONDICOES_PADRAO } from './condicoes-padrao';
+import { ContratoService } from './contrato.service';
 
 // CC fixo de controle para o envio da proposta (além do MAIL_CC do servidor)
 const CC_FIXO_PROPOSTA = 'paulo@bestmedical.com.br';
@@ -37,6 +38,7 @@ export class ContratosService {
     private prisma: PrismaService,
     private pdf: PropostaPdfService,
     private email: EmailService,
+    private contrato: ContratoService,
   ) {}
 
   // ===== Próximo número: PC-{ano}-{seq} =====
@@ -264,6 +266,13 @@ export class ContratosService {
       });
     });
 
+    // Gera o contrato automaticamente se a proposta estiver aprovada (idempotente).
+    if ((prop as any).statusAprovado) {
+      this.contrato.gerarDeProposta(id).catch(() => {
+        // Não bloqueia a resposta — o contrato pode ser gerado depois.
+      });
+    }
+
     return this.serialize(prop);
   }
 
@@ -356,6 +365,14 @@ export class ContratosService {
       data,
       include: PROP_INCLUDE,
     });
+
+    // Gera o contrato automaticamente na primeira vez que a proposta for aprovada.
+    if (prop.statusAprovado) {
+      this.contrato.gerarDeProposta(id).catch(() => {
+        // Não bloqueia a resposta do status — o contrato pode ser gerado depois.
+      });
+    }
+
     return this.serialize(prop);
   }
 
