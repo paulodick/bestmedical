@@ -62,6 +62,12 @@ export class CrmService {
     return { ok: true };
   }
 
+  // Apaga TODOS os contatos do CRM de uma vez. Retorna a quantidade removida.
+  async removerTodos() {
+    const r = await this.prisma.crmContato.deleteMany({});
+    return { ok: true, removidos: r.count };
+  }
+
   private async ensure(id: string) {
     const c = await this.prisma.crmContato.findUnique({ where: { id } });
     if (!c) throw new NotFoundException('Contato não encontrado');

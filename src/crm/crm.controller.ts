@@ -48,6 +48,14 @@ export class CrmController {
     return this.crm.update(id, dto);
   }
 
+  // Apaga TODOS os contatos do CRM (ação destrutiva, somente admin).
+  // O frontend faz dupla checagem (modal "tem certeza?") antes de chamar.
+  @Roles('admin')
+  @Delete()
+  removerTodos() {
+    return this.crm.removerTodos();
+  }
+
   @Roles('admin')
   @Delete(':id')
   remove(@Param('id') id: string) {
