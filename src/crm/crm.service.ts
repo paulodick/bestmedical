@@ -75,7 +75,7 @@ export class CrmService {
       itens = parseVCard(dto.vcard);
     } else if (dto.contatos && dto.contatos.length) {
       itens = dto.contatos.map((c) => {
-        const sep = separarEmpresaNome(c.nome, c.empresa);
+        const sep = classificarContato(c.nome, c.empresa);
         return {
           ...c,
           nome: sep.nome,
@@ -116,39 +116,105 @@ export class CrmService {
 }
 
 // ===================================================================
-// Heurística: separar Empresa do Nome.
-// Ex.: "Fleury Ricardo" -> { empresa: "Fleury", nome: "Ricardo" }.
-// Regra: se já veio empresa preenchida, mantém. Caso contrário, quando o
-// nome tem 2+ palavras e a PRIMEIRA palavra NÃO parece um primeiro nome
-// próprio comum, assume que ela é a empresa e o resto é o nome da pessoa.
-// É uma heurística conservadora — o usuário revisa/corrige na planilha.
+// Inteligência: classificar o contato como PESSOA ou EMPRESA.
+//
+// Objetivo (definido pelo usuário): ao importar, detectar se o texto do
+// contato é nome de PESSOA (vai para o campo Nome) ou nome de EMPRESA /
+// organização / algo que não seja pessoa (vai para o campo Empresa).
+// Em caso de DÚVIDA, deixa tudo no campo Nome para o usuário ajustar.
+//
+// Regras:
+//  - Se o vCard/CSV já trouxe uma EMPRESA (ORG) preenchida, respeita: o
+//    texto principal fica como Nome (pessoa) e a empresa no seu campo.
+//  - Sem empresa: pontuamos sinais de "empresa" vs "pessoa". Se os sinais
+//    de empresa forem claros, movemos TUDO para Empresa (Nome vazio).
+//  - Caso contrário, mantemos TUDO em Nome (comportamento conservador).
 // ===================================================================
-function separarEmpresaNome(
-  nomeBruto: string,
+function classificarContato(
+  textoBruto: string,
   empresaExistente?: string | null,
 ): { nome: string; empresa: string | null } {
-  const nome = (nomeBruto || '').trim();
+  const texto = (textoBruto || '').trim();
+
+  // 1) Já veio empresa de um campo dedicado (ORG do vCard / coluna do CSV).
   if (empresaExistente && empresaExistente.trim()) {
-    return { nome, empresa: empresaExistente.trim() };
+    return { nome: texto, empresa: empresaExistente.trim() };
   }
 
-  const partes = nome.split(/\s+/).filter(Boolean);
-  if (partes.length < 2) {
-    return { nome, empresa: null };
+  if (!texto) return { nome: texto, empresa: null };
+
+  // 2) Sem empresa: decide se o PRÓPRIO texto é uma empresa.
+  if (pareceEmpresa(texto)) {
+    return { nome: '', empresa: texto };
   }
 
-  const primeira = partes[0];
-  const primeiraNorm = removerAcentos(primeira.toLowerCase());
+  // 3) Dúvida ou pessoa: deixa tudo no Nome (usuário ajusta).
+  return { nome: texto, empresa: null };
+}
 
-  // Se a primeira palavra é um primeiro nome próprio comum, NÃO separa.
-  if (PRIMEIROS_NOMES.has(primeiraNorm)) {
-    return { nome, empresa: null };
+// Decide se um texto é nome de EMPRESA/organização (e não de pessoa).
+// Conservador: na dúvida retorna false (mantém como Nome de pessoa).
+function pareceEmpresa(texto: string): boolean {
+  const original = texto.trim();
+  if (!original) return false;
+
+  const norm = removerAcentos(original.toLowerCase());
+  const palavras = norm.split(/\s+/).filter(Boolean);
+
+  // a) Sufixos/termos jurídicos e de razão social.
+  const TERMOS_JURIDICOS = [
+    'ltda', 'eireli', 'mei', 'epp', 'cia', 'slu', 'inc', 'corp',
+    'corporation', 'llc', 'gmbh', 'sociedade', 'associacao', 'fundacao',
+    'cooperativa', 'holding', 'group', 'grupo',
+  ];
+  if (palavras.some((p) => TERMOS_JURIDICOS.includes(p))) return true;
+  // "me", "ei", "sa" só contam como empresa em razão social (2+ palavras).
+  if (
+    palavras.length >= 2 &&
+    palavras.some((p) => ['me', 'ei', 'sa'].includes(p))
+  ) {
+    return true;
   }
 
-  // Caso contrário, trata a primeira palavra como empresa e o resto como nome.
-  const empresa = primeira;
-  const restante = partes.slice(1).join(' ');
-  return { nome: restante || nome, empresa };
+  // b) Palavras-chave de negócio / segmento (forte indicador).
+  const PALAVRAS_NEGOCIO = [
+    'hospital', 'clinica', 'clinicas', 'laboratorio', 'lab', 'farmacia',
+    'drogaria', 'medical', 'medica', 'medicos', 'saude', 'odonto',
+    'odontologia', 'imd', 'instituto', 'centro', 'policlinica', 'upa',
+    'maternidade', 'unimed', 'comercio', 'comercial', 'industria',
+    'industrial', 'distribuidora', 'representacoes', 'representacao',
+    'servicos', 'solucoes', 'tecnologia', 'sistemas', 'engenharia',
+    'construtora', 'transportes', 'transportadora', 'logistica',
+    'consultoria', 'assessoria', 'agencia', 'loja', 'magazine',
+    'supermercado', 'mercado', 'atacado', 'varejo', 'restaurante',
+    'lanchonete', 'padaria', 'hotel', 'pousada', 'oficina', 'autopecas',
+    'pecas', 'materiais', 'equipamentos', 'eletro', 'eletronica',
+    'informatica', 'telecom', 'energia', 'imobiliaria', 'imoveis',
+    'seguros', 'corretora', 'financeira', 'contabilidade', 'advocacia',
+    'advogados', 'associados', 'partners', 'company', 'enterprise',
+    'industries', 'foods', 'store', 'studios', 'studio', 'agropecuaria',
+  ];
+  if (palavras.some((p) => PALAVRAS_NEGOCIO.includes(p))) return true;
+
+  // c) Símbolos típicos de razão social.
+  if (/[&@]/.test(original)) return true;
+  if (/\bltda\b|\bs\.?a\.?\b/i.test(original)) return true;
+  // Números embutidos com 2+ palavras (ex.: "Auto Center 24h").
+  if (/\d/.test(original) && palavras.length >= 2) return true;
+
+  // d) TUDO EM MAIÚSCULAS com 2+ palavras costuma ser razão social.
+  const ehMaiusculas =
+    original === original.toUpperCase() && /[A-ZÀ-Ý]/.test(original);
+  if (ehMaiusculas && palavras.length >= 2) return true;
+
+  // --- Sinais de PESSOA (se presentes, NÃO é empresa) ---
+  if (palavras.length >= 1 && PRIMEIROS_NOMES.has(palavras[0])) return false;
+  if (palavras.some((p) => ['de', 'da', 'do', 'dos', 'das'].includes(p))) {
+    return false;
+  }
+
+  // Sem sinais claros -> trata como PESSOA (deixa no Nome). Conservador.
+  return false;
 }
 
 function removerAcentos(s: string): string {
@@ -258,7 +324,7 @@ function parseVCard(texto: string): ImportarContatoItemDto[] {
       telefonePessoal = ordem[1] || undefined;
     }
 
-    const sep = separarEmpresaNome(nome, org || null);
+    const sep = classificarContato(nome, org || null);
 
     contatos.push({
       nome: sep.nome,
