@@ -204,8 +204,11 @@ function parseVCard(texto: string): ImportarContatoItemDto[] {
     for (const linha of linhas) {
       const idx = linha.indexOf(':');
       if (idx === -1) continue;
-      const esquerda = linha.slice(0, idx);
+      let esquerda = linha.slice(0, idx);
       const valor = decodificarValor(linha.slice(idx + 1).trim(), esquerda);
+      // Remove prefixo de grupo do vCard (ex.: "item1.TEL" -> "TEL",
+      // "item2.EMAIL" -> "EMAIL"). Comum em exportações de iPhone/Google.
+      esquerda = esquerda.replace(/^item\d+\./i, '');
       const nomeCampo = esquerda.split(';')[0].toUpperCase();
       const paramsUpper = esquerda.toUpperCase();
 
