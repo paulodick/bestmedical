@@ -27,6 +27,7 @@ model Usuario {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   orcamentos Orcamento[]
+  propostas  Proposta[]
 
   @@map("usuarios")
 }
@@ -48,6 +49,7 @@ model Cliente {
 
   contatos   Contato[]
   orcamentos Orcamento[]
+  propostas  Proposta[]
 
   @@map("clientes")
 }
@@ -64,6 +66,7 @@ model Contato {
 
   cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   orcamentos Orcamento[]
+  propostas  Proposta[]
 
   @@map("contatos")
 }
@@ -259,4 +262,86 @@ model FotoOS {
 
   @@index([ordemId])
   @@map("fotos_os")
+}
+
+// ===== Proposta de Contrato =====
+// Espelha o Orcamento: snapshots de cliente/solicitante, resumo financeiro em
+// centavos e back-relations opcionais para Cliente/Contato/Usuario. Os
+// equipamentos cobertos ficam em ItemPropostaEquip (1 linha = 1 equipamento,
+// com o "Valor do Contrato" mensal próprio).
+model Proposta {
+  id        String   @id @default(uuid())
+  numero    String   @unique            // PC-2026-0001
+  data      DateTime @db.Date
+
+  clienteId String  @map("cliente_id")
+  contatoId String? @map("contato_id")
+  criadoPor String? @map("criado_por")
+
+  // Snapshot (preenchido na emissão) — preserva histórico
+  clienteNomeSnap String? @map("cliente_nome_snap")
+  clienteCnpjSnap String? @map("cliente_cnpj_snap")
+  solicitanteSnap String? @map("solicitante_snap")
+  setorSnap       String? @map("setor_snap")
+  telefoneSnap    String? @map("telefone_snap")
+  emailSnap       String? @map("email_snap")
+
+  // Modalidade do contrato
+  tipoContrato String @map("tipo_contrato") // "Suporte Remoto" | "Mão de Obra - Regular" | "Mão de Obra - Especial"
+
+  // Condições do contrato (texto editável) + snapshot do texto padrão vigente
+  // na criação (usado como base estável para o diff de customizações).
+  condicoesContrato   String @default("") @map("condicoes_contrato") @db.Text
+  condicoesPadraoSnap String @default("") @map("condicoes_padrao_snap") @db.Text
+  // Observações internas: recebe automaticamente o bloco de customizações
+  // (entre marcadores) e preserva anotações manuais. Não aparece no PDF.
+  observacoesInternas String @default("") @map("observacoes_internas") @db.Text
+
+  // Texto final (rodapé do PDF)
+  textoFinal String? @map("texto_final") @db.Text
+
+  // Resumo financeiro (mensal)
+  descontoPercent  Float @default(0) @map("desconto_percent")
+  subtotalCentavos Int   @default(0) @map("subtotal_centavos")
+  descontoCentavos Int   @default(0) @map("desconto_centavos")
+  totalCentavos    Int   @default(0) @map("total_centavos")
+
+  // Status / envio (mesmos status de controle do orçamento)
+  statusEnviado            Boolean   @default(false) @map("status_enviado")
+  statusAprovado           Boolean   @default(false) @map("status_aprovado")
+  statusRealizado          Boolean   @default(false) @map("status_realizado")
+  statusAguardandoPeca     Boolean   @default(false) @map("status_aguardando_peca")
+  statusOrdemServico       Boolean   @default(false) @map("status_ordem_servico")
+  statusPagamentoRealizado Boolean   @default(false) @map("status_pagamento_realizado")
+  enviadoEm                DateTime? @map("enviado_em")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cliente      Cliente             @relation(fields: [clienteId], references: [id])
+  contato      Contato?            @relation(fields: [contatoId], references: [id])
+  criador      Usuario?            @relation(fields: [criadoPor], references: [id])
+  equipamentos ItemPropostaEquip[]
+
+  @@index([data])
+  @@index([clienteId])
+  @@map("propostas")
+}
+
+model ItemPropostaEquip {
+  id            String @id @default(uuid())
+  propostaId    String @map("proposta_id")
+  ordem         Int    @default(0)
+  modalidade    String @default("")
+  marca         String @default("")
+  marcaOutras   String @default("") @map("marca_outras")
+  modelo        String @default("")
+  numeroSerie   String @default("") @map("numero_serie")
+  // "Valor do Contrato" (mensal) da linha, em centavos
+  valorCentavos Int    @default(0) @map("valor_centavos")
+
+  proposta Proposta @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+
+  @@index([propostaId])
+  @@map("itens_proposta_equip")
 }
