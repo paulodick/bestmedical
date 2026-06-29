@@ -103,48 +103,97 @@ export class ClientesService {
     return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
   }
 
-  // Consulta dados públicos do CNPJ na BrasilAPI (sem chave). Em caso de
-  // erro/timeout, retorna null para o fluxo seguir como cliente novo.
+  // GET JSON usando o módulo https nativo (independe de fetch global).
+  private getJson(url: string, timeoutMs = 8000): Promise<any | null> {
+    // import dinâmico para não exigir tipos no topo do arquivo
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const https = require('https');
+    return new Promise((resolve) => {
+      try {
+        const req = https.get(
+          url,
+          { headers: { 'User-Agent': 'BestMedical/1.0', Accept: 'application/json' } },
+          (res: any) => {
+            if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+              res.resume();
+              return resolve(null);
+            }
+            let data = '';
+            res.on('data', (c: any) => (data += c));
+            res.on('end', () => {
+              try {
+                resolve(JSON.parse(data));
+              } catch {
+                resolve(null);
+              }
+            });
+          },
+        );
+        req.setTimeout(timeoutMs, () => {
+          req.destroy();
+          resolve(null);
+        });
+        req.on('error', () => resolve(null));
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
+  // Consulta dados públicos do CNPJ. Tenta BrasilAPI e, se falhar, ReceitaWS.
+  // Em caso de erro/timeout, retorna null para o fluxo seguir como cliente novo.
   private async consultarCnpjPublico(digitos: string) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      const resp = await fetch(
-        `https://brasilapi.com.br/api/cnpj/v1/${digitos}`,
-        { signal: ctrl.signal },
-      );
-      clearTimeout(timer);
-      if (!resp.ok) return null;
-      const d: any = await resp.json();
-
-      // Telefone: prefere o primeiro DDD+numero disponível.
-      const tel = (d.ddd_telefone_1 || d.ddd_telefone_2 || '').toString().trim();
-      const empresa = (d.nome_fantasia || d.razao_social || '').toString().trim();
-
+    // 1) BrasilAPI
+    const b = await this.getJson(`https://brasilapi.com.br/api/cnpj/v1/${digitos}`);
+    if (b && (b.razao_social || b.nome_fantasia)) {
+      const tel = (b.ddd_telefone_1 || b.ddd_telefone_2 || '').toString().trim();
       return {
         encontrado: true,
         fonte: 'receita',
         cnpj: this.formatarCnpj(digitos),
-        empresa,
-        cep: (d.cep || '').toString().replace(/\D/g, ''),
-        endereco: [d.descricao_tipo_de_logradouro, d.logradouro]
+        empresa: (b.nome_fantasia || b.razao_social || '').toString().trim(),
+        cep: (b.cep || '').toString().replace(/\D/g, ''),
+        endereco: [b.descricao_tipo_de_logradouro, b.logradouro]
           .filter(Boolean)
           .join(' ')
           .trim(),
-        enderecoNumero: (d.numero || '').toString(),
-        complemento: (d.complemento || '').toString(),
-        bairro: (d.bairro || '').toString(),
-        cidade: (d.municipio || '').toString(),
-        estado: (d.uf || '').toString(),
+        enderecoNumero: (b.numero || '').toString(),
+        complemento: (b.complemento || '').toString(),
+        bairro: (b.bairro || '').toString(),
+        cidade: (b.municipio || '').toString(),
+        estado: (b.uf || '').toString(),
         pais: 'Brasil',
         solicitante: '',
         setor: '',
         telefone: tel,
-        email: (d.email || '').toString(),
+        email: (b.email || '').toString(),
       };
-    } catch {
-      return null;
     }
+
+    // 2) ReceitaWS (fallback)
+    const r = await this.getJson(`https://receitaws.com.br/v1/cnpj/${digitos}`);
+    if (r && r.status === 'OK' && (r.nome || r.fantasia)) {
+      return {
+        encontrado: true,
+        fonte: 'receita',
+        cnpj: this.formatarCnpj(digitos),
+        empresa: (r.fantasia || r.nome || '').toString().trim(),
+        cep: (r.cep || '').toString().replace(/\D/g, ''),
+        endereco: (r.logradouro || '').toString(),
+        enderecoNumero: (r.numero || '').toString(),
+        complemento: (r.complemento || '').toString(),
+        bairro: (r.bairro || '').toString(),
+        cidade: (r.municipio || '').toString(),
+        estado: (r.uf || '').toString(),
+        pais: 'Brasil',
+        solicitante: '',
+        setor: '',
+        telefone: (r.telefone || '').toString(),
+        email: (r.email || '').toString(),
+      };
+    }
+
+    return null;
   }
 
   async get(id: string) {
