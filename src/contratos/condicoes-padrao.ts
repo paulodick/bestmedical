@@ -13,7 +13,7 @@ export type TipoContrato = (typeof TIPOS_CONTRATO)[number];
 // Texto padrão da modalidade "Mão de Obra - Especial" (seções e bullets).
 const MAO_DE_OBRA_ESPECIAL = `PONTOS DE ATENDIMENTO E PRAZOS
 • Abertura de chamado: das 7h às 23h.
-• Suporte telefônico: em até 4h dentro da janela de atendimento. Se o prazo ultrapassar as 23h, o saldo de horas é retomado no dia seguinte a partir das 7h.
+• Suporte telefônico: em até 2h dentro da janela de atendimento. Se o prazo ultrapassar as 23h, o saldo de horas é retomado no dia seguinte a partir das 7h.
 • Atendimento presencial: em até 24h, de segunda a segunda, salvo justificativa nossa em prol da efetividade (ex.: necessidade de peça ou envio de ferramental).
 • Manutenções preventivas e corretivas: agendáveis em horário estendido (7h às 23h, de segunda a segunda) para minimizar a parada de máquina.
 
