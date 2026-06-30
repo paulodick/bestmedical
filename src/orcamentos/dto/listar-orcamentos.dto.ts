@@ -8,6 +8,7 @@ export const STATUS_KEYS = [
   'aguardandoPeca',
   'ordemServico',
   'pagamentoRealizado',
+  'reprovado',
 ] as const;
 
 export type StatusKey = (typeof STATUS_KEYS)[number];
@@ -32,4 +33,5 @@ export class UpdateStatusDto {
   @IsOptional() aguardandoPeca?: boolean;
   @IsOptional() ordemServico?: boolean;
   @IsOptional() pagamentoRealizado?: boolean;
+  @IsOptional() reprovado?: boolean;
 }

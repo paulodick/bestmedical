@@ -323,6 +323,7 @@ export class OrcamentosService {
       data.statusOrdemServico = dto.ordemServico;
     if (dto.pagamentoRealizado !== undefined)
       data.statusPagamentoRealizado = dto.pagamentoRealizado;
+    if (dto.reprovado !== undefined) data.statusReprovado = dto.reprovado;
 
     const orc = await this.prisma.orcamento.update({
       where: { id },
@@ -358,6 +359,7 @@ export class OrcamentosService {
         aguardandoPeca: 'statusAguardandoPeca',
         ordemServico: 'statusOrdemServico',
         pagamentoRealizado: 'statusPagamentoRealizado',
+        reprovado: 'statusReprovado',
       };
       (where as any)[map[q.status]] = true;
     }
@@ -538,6 +540,7 @@ export class OrcamentosService {
       aguardandoPeca: o.statusAguardandoPeca,
       ordemServico: o.statusOrdemServico,
       pagamentoRealizado: o.statusPagamentoRealizado,
+      reprovado: o.statusReprovado ?? false,
       // quando foi enviado (usado na coluna "Enviado" do Controle)
       enviadoEm: o.enviadoEm ? new Date(o.enviadoEm).toISOString() : null,
       // listas

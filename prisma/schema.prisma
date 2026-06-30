@@ -136,6 +136,7 @@ model Orcamento {
   statusAguardandoPeca     Boolean   @default(false) @map("status_aguardando_peca")
   statusOrdemServico       Boolean   @default(false) @map("status_ordem_servico")
   statusPagamentoRealizado Boolean   @default(false) @map("status_pagamento_realizado")
+  statusReprovado          Boolean   @default(false) @map("status_reprovado")
   enviadoEm                DateTime? @map("enviado_em")
 
   createdAt DateTime @default(now()) @map("created_at")

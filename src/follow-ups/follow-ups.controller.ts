@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { FollowUpsService } from './follow-ups.service';
 import { CreateFollowUpDto, ListarFollowUpsDto } from './dto/follow-up.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -20,5 +29,13 @@ export class FollowUpsController {
   @Post()
   create(@Body() dto: CreateFollowUpDto, @CurrentUser() user: AuthUser) {
     return this.followUps.create(dto, user);
+  }
+
+  // Exclusão: a verificação de permissão (próprio autor ou admin master)
+  // é feita no service. Por isso não restringimos por @Roles aqui — um
+  // operador precisa poder apagar o próprio comentário.
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.followUps.remove(id, user);
   }
 }

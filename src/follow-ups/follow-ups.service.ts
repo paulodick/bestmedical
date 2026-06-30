@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFollowUpDto, ListarFollowUpsDto } from './dto/follow-up.dto';
 import { AuthUser } from '../auth/current-user.decorator';
@@ -51,6 +56,26 @@ export class FollowUpsService {
     });
 
     return this.serialize(row);
+  }
+
+  // Exclui um follow-up. Permitido apenas ao PRÓPRIO autor ou ao
+  // administrador master (paulo@bestmedical.com.br), para evitar problemas.
+  async remove(id: string, user?: AuthUser) {
+    const fu = await this.prisma.followUp.findUnique({ where: { id } });
+    if (!fu) throw new NotFoundException('Follow-up não encontrado.');
+
+    const ehAutor = !!user?.id && fu.autorId === user.id;
+    const ehAdminMaster =
+      (user?.email || '').trim().toLowerCase() === 'paulo@bestmedical.com.br';
+
+    if (!ehAutor && !ehAdminMaster) {
+      throw new ForbiddenException(
+        'Você só pode apagar os seus próprios comentários.',
+      );
+    }
+
+    await this.prisma.followUp.delete({ where: { id } });
+    return { ok: true };
   }
 
   private serialize(r: {
