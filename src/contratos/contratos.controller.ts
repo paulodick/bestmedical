@@ -18,6 +18,7 @@ import { CreatePropostaDto, UpdatePropostaDto } from './dto/proposta.dto';
 import {
   ListarPropostasDto,
   UpdateStatusPropostaDto,
+  UploadContratoAssinadoDto,
 } from './dto/listar-propostas.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -91,6 +92,32 @@ export class ContratosController {
   @Post(':id/enviar')
   enviar(@Param('id') id: string) {
     return this.contratos.enviar(id);
+  }
+
+  // Upload do contrato assinado (PDF base64). Ao carregar, a proposta passa
+  // automaticamente para o status "Assinado".
+  @Roles('admin', 'operador')
+  @Post(':id/contrato-assinado')
+  uploadContratoAssinado(
+    @Param('id') id: string,
+    @Body() dto: UploadContratoAssinadoDto,
+  ) {
+    return this.contratos.uploadContratoAssinado(id, dto);
+  }
+
+  // Abre/baixa o PDF do contrato assinado carregado.
+  @Get(':id/contrato-assinado')
+  async contratoAssinadoDownload(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, nome } = await this.contratos.getContratoAssinado(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${nome}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   // Exclusão é uma ação destrutiva — restrita a administradores.

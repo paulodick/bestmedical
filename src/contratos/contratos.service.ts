@@ -291,6 +291,9 @@ export class ContratosService {
         aguardandoPeca: 'statusAguardandoPeca',
         ordemServico: 'statusOrdemServico',
         pagamentoRealizado: 'statusPagamentoRealizado',
+        assinado: 'statusAssinado',
+        vigente: 'statusVigente',
+        reprovado: 'statusReprovado',
       };
       const campo = mapaStatus[q.status];
       if (campo) (where as Record<string, unknown>)[campo] = true;
@@ -359,6 +362,9 @@ export class ContratosService {
       data.statusOrdemServico = dto.ordemServico;
     if (dto.pagamentoRealizado !== undefined)
       data.statusPagamentoRealizado = dto.pagamentoRealizado;
+    if (dto.assinado !== undefined) data.statusAssinado = dto.assinado;
+    if (dto.vigente !== undefined) data.statusVigente = dto.vigente;
+    if (dto.reprovado !== undefined) data.statusReprovado = dto.reprovado;
 
     const prop = await this.prisma.proposta.update({
       where: { id },
@@ -449,6 +455,53 @@ export class ContratosService {
     };
   }
 
+  // ===== Upload do contrato assinado (PDF em base64) =====
+  // Ao carregar, a proposta passa automaticamente para o status "Assinado".
+  async uploadContratoAssinado(
+    id: string,
+    dto: { arquivoBase64: string; nome?: string },
+  ) {
+    await this.ensure(id);
+
+    const base64 = (dto.arquivoBase64 || '').trim();
+    if (!base64) {
+      throw new NotFoundException('Arquivo não enviado.');
+    }
+    // Remove um possível prefixo data URL (data:application/pdf;base64,....)
+    const conteudo = base64.includes(',') ? base64.split(',').pop()! : base64;
+
+    const prop = await this.prisma.proposta.update({
+      where: { id },
+      data: {
+        contratoAssinadoArquivo: conteudo,
+        contratoAssinadoNome:
+          (dto.nome || '').trim() || 'contrato-assinado.pdf',
+        contratoAssinadoEm: new Date(),
+        statusAssinado: true,
+      },
+      include: PROP_INCLUDE,
+    });
+
+    return this.serialize(prop);
+  }
+
+  // ===== Recupera o PDF do contrato assinado (buffer) =====
+  async getContratoAssinado(
+    id: string,
+  ): Promise<{ buffer: Buffer; nome: string }> {
+    const p = await this.prisma.proposta.findUnique({
+      where: { id },
+      select: { contratoAssinadoArquivo: true, contratoAssinadoNome: true },
+    });
+    if (!p || !p.contratoAssinadoArquivo) {
+      throw new NotFoundException('Contrato assinado não encontrado.');
+    }
+    return {
+      buffer: Buffer.from(p.contratoAssinadoArquivo, 'base64'),
+      nome: p.contratoAssinadoNome ?? 'contrato-assinado.pdf',
+    };
+  }
+
   private async ensure(id: string) {
     const p = await this.prisma.proposta.findUnique({ where: { id } });
     if (!p) throw new NotFoundException('Proposta não encontrada');
@@ -498,6 +551,21 @@ export class ContratosService {
       aguardandoPeca: p.statusAguardandoPeca ?? false,
       ordemServico: p.statusOrdemServico ?? false,
       pagamentoRealizado: p.statusPagamentoRealizado ?? false,
+      // status específicos de Proposta de Contrato (PC)
+      assinado: p.statusAssinado ?? false,
+      vigente: p.statusVigente ?? false,
+      reprovado: p.statusReprovado ?? false,
+      // envio
+      enviadoEm: p.enviadoEm ? new Date(p.enviadoEm).toISOString() : null,
+      // contrato assinado carregado (somente metadados; o arquivo é servido por rota própria)
+      contratoAssinado: p.contratoAssinadoArquivo
+        ? {
+            nome: p.contratoAssinadoNome ?? 'contrato-assinado.pdf',
+            em: p.contratoAssinadoEm
+              ? new Date(p.contratoAssinadoEm).toISOString()
+              : null,
+          }
+        : null,
       // equipamentos
       equipamentos: (p.equipamentos || []).map((e: any) => ({
         id: e.id,

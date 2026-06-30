@@ -28,12 +28,13 @@ model Usuario {
 
   orcamentos Orcamento[]
   propostas  Proposta[]
+  followUps  FollowUp[]
 
   @@map("usuarios")
 }
 
 model Cliente {
-  id        String   @id @default(uuid())
+  id          String   @id @default(uuid())
   cnpj        String?  @unique
   nome        String
   cep         String?
@@ -44,8 +45,8 @@ model Cliente {
   cidade      String?
   estado      String?  @db.Char(2)
   pais        String   @default("Brasil")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   contatos   Contato[]
   orcamentos Orcamento[]
@@ -93,9 +94,9 @@ model CrmContato {
 }
 
 model Orcamento {
-  id        String   @id @default(uuid())
-  numero    String   @unique
-  data      DateTime @db.Date
+  id     String   @id @default(uuid())
+  numero String   @unique
+  data   DateTime @db.Date
 
   clienteId String  @map("cliente_id")
   contatoId String? @map("contato_id")
@@ -140,12 +141,13 @@ model Orcamento {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  cliente  Cliente         @relation(fields: [clienteId], references: [id])
-  contato  Contato?        @relation(fields: [contatoId], references: [id])
-  criador  Usuario?        @relation(fields: [criadoPor], references: [id])
+  cliente      Cliente         @relation(fields: [clienteId], references: [id])
+  contato      Contato?        @relation(fields: [contatoId], references: [id])
+  criador      Usuario?        @relation(fields: [criadoPor], references: [id])
   itens        ItemOrcamento[]
-  parcelas      Parcela[]
-  ordemServico  OrdemServico?
+  parcelas     Parcela[]
+  ordemServico OrdemServico?
+  followUps    FollowUp[]
 
   @@index([data])
   @@index([clienteId])
@@ -184,37 +186,37 @@ model Parcela {
 
 model OrdemServico {
   id          String   @id @default(uuid())
-  numero      String   @unique            // OS-2026-0001
-  orcamentoId String   @unique @map("orcamento_id")  // 1 OS por orçamento
+  numero      String   @unique // OS-2026-0001
+  orcamentoId String   @unique @map("orcamento_id") // 1 OS por orçamento
   data        DateTime @db.Date
 
   // Snapshot de cliente/solicitante/equipamento (copiado do orçamento na criação)
   clienteNomeSnap String? @map("cliente_nome_snap")
   clienteCnpjSnap String? @map("cliente_cnpj_snap")
   // Endereço copiado do cadastro do cliente no momento da criação
-  cep         String?
-  endereco    String?
-  enderecoNumero String? @map("endereco_numero")
-  complemento String?
-  bairro      String?
-  cidade      String?
-  estado      String?
-  pais        String?  @default("Brasil")
+  cep             String?
+  endereco        String?
+  enderecoNumero  String? @map("endereco_numero")
+  complemento     String?
+  bairro          String?
+  cidade          String?
+  estado          String?
+  pais            String? @default("Brasil")
   solicitanteSnap String? @map("solicitante_snap")
-  setorSnap   String? @map("setor_snap")
-  telefoneSnap String? @map("telefone_snap")
-  emailSnap   String? @map("email_snap")
+  setorSnap       String? @map("setor_snap")
+  telefoneSnap    String? @map("telefone_snap")
+  emailSnap       String? @map("email_snap")
 
   // Equipamento
-  modalidade  String?
-  marca       String?
-  marcaOutras String? @map("marca_outras")
-  modelo      String?
-  numeroSerie String? @map("numero_serie")
+  modalidade      String?
+  marca           String?
+  marcaOutras     String? @map("marca_outras")
+  modelo          String?
+  numeroSerie     String? @map("numero_serie")
   descricaoVisita String? @map("descricao_visita")
 
   // Campos próprios da OS
-  descricaoServico String? @map("descricao_servico")  // caixa de texto "descrição do serviço"
+  descricaoServico String? @map("descricao_servico") // caixa de texto "descrição do serviço"
   observacoes      String?
 
   // Assinaturas (data URL base64 PNG do canvas — pode ficar grande, use @db.Text)
@@ -235,14 +237,14 @@ model OrdemServico {
 }
 
 model ItemOS {
-  id          String  @id @default(uuid())
-  ordemId     String  @map("ordem_id")
-  ordem       Int     @default(0)        // posição
-  codigo      String  @default("")
-  descricao   String  @default("")       // "item"
-  quantidade  Int     @default(1)
-  realizado   Boolean @default(false)    // checkbox "trabalho realizado"
-  detalhes    String  @default("")       // coluna "Detalhes" (campo preenchível)
+  id         String  @id @default(uuid())
+  ordemId    String  @map("ordem_id")
+  ordem      Int     @default(0) // posição
+  codigo     String  @default("")
+  descricao  String  @default("") // "item"
+  quantidade Int     @default(1)
+  realizado  Boolean @default(false) // checkbox "trabalho realizado"
+  detalhes   String  @default("") // coluna "Detalhes" (campo preenchível)
 
   os OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
 
@@ -251,12 +253,12 @@ model ItemOS {
 }
 
 model FotoOS {
-  id       String @id @default(uuid())
-  ordemId  String @map("ordem_id")
-  ordem    Int    @default(0)
+  id      String @id @default(uuid())
+  ordemId String @map("ordem_id")
+  ordem   Int    @default(0)
   // Imagem em data URL base64 (jpeg/png). Use @db.Text.
-  dataUrl  String @map("data_url") @db.Text
-  legenda  String @default("")
+  dataUrl String @map("data_url") @db.Text
+  legenda String @default("")
 
   os OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
 
@@ -270,9 +272,9 @@ model FotoOS {
 // equipamentos cobertos ficam em ItemPropostaEquip (1 linha = 1 equipamento,
 // com o "Valor do Contrato" mensal próprio).
 model Proposta {
-  id        String   @id @default(uuid())
-  numero    String   @unique            // PC-2026-0001
-  data      DateTime @db.Date
+  id     String   @id @default(uuid())
+  numero String   @unique // PC-2026-0001
+  data   DateTime @db.Date
 
   clienteId String  @map("cliente_id")
   contatoId String? @map("contato_id")
@@ -313,7 +315,16 @@ model Proposta {
   statusAguardandoPeca     Boolean   @default(false) @map("status_aguardando_peca")
   statusOrdemServico       Boolean   @default(false) @map("status_ordem_servico")
   statusPagamentoRealizado Boolean   @default(false) @map("status_pagamento_realizado")
+  // Status específicos de Proposta de Contrato (PC)
+  statusAssinado           Boolean   @default(false) @map("status_assinado")
+  statusVigente            Boolean   @default(false) @map("status_vigente")
+  statusReprovado          Boolean   @default(false) @map("status_reprovado")
   enviadoEm                DateTime? @map("enviado_em")
+
+  // Contrato assinado (PDF) carregado pelo usuário, armazenado em base64.
+  contratoAssinadoArquivo String?   @map("contrato_assinado_arquivo") @db.Text
+  contratoAssinadoNome    String?   @map("contrato_assinado_nome")
+  contratoAssinadoEm      DateTime? @map("contrato_assinado_em")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -323,10 +334,31 @@ model Proposta {
   criador      Usuario?            @relation(fields: [criadoPor], references: [id])
   equipamentos ItemPropostaEquip[]
   contrato     Contrato?
+  followUps    FollowUp[]
 
   @@index([data])
   @@index([clienteId])
   @@map("propostas")
+}
+
+// Registro de follow-up (acompanhamento comercial). Vinculado a um
+// orçamento OU a uma proposta. Guarda quem escreveu e quando.
+model FollowUp {
+  id          String   @id @default(uuid())
+  orcamentoId String?  @map("orcamento_id")
+  propostaId  String?  @map("proposta_id")
+  autorId     String?  @map("autor_id")
+  autorNome   String   @map("autor_nome")
+  texto       String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  orcamento Orcamento? @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  proposta  Proposta?  @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+  autor     Usuario?   @relation(fields: [autorId], references: [id])
+
+  @@index([orcamentoId])
+  @@index([propostaId])
+  @@map("follow_ups")
 }
 
 // ===== Contrato =====

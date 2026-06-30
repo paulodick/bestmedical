@@ -8,6 +8,9 @@ export const STATUS_KEYS_PROPOSTA = [
   'aguardandoPeca',
   'ordemServico',
   'pagamentoRealizado',
+  'assinado',
+  'vigente',
+  'reprovado',
 ] as const;
 
 export type StatusKeyProposta = (typeof STATUS_KEYS_PROPOSTA)[number];
@@ -34,4 +37,13 @@ export class UpdateStatusPropostaDto {
   @IsOptional() aguardandoPeca?: boolean;
   @IsOptional() ordemServico?: boolean;
   @IsOptional() pagamentoRealizado?: boolean;
+  @IsOptional() assinado?: boolean;
+  @IsOptional() vigente?: boolean;
+  @IsOptional() reprovado?: boolean;
+}
+
+// Upload do contrato assinado (PDF) em base64.
+export class UploadContratoAssinadoDto {
+  @IsString() arquivoBase64!: string;
+  @IsOptional() @IsString() nome?: string;
 }

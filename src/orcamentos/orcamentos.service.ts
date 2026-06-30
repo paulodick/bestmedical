@@ -538,6 +538,8 @@ export class OrcamentosService {
       aguardandoPeca: o.statusAguardandoPeca,
       ordemServico: o.statusOrdemServico,
       pagamentoRealizado: o.statusPagamentoRealizado,
+      // quando foi enviado (usado na coluna "Enviado" do Controle)
+      enviadoEm: o.enviadoEm ? new Date(o.enviadoEm).toISOString() : null,
       // listas
       itens: (o.itens || []).map((it: any) => ({
         id: it.id,
