@@ -12,4 +12,9 @@ export class UsersService {
   findById(id: string) {
     return this.prisma.usuario.findUnique({ where: { id } });
   }
+
+  // Atualiza apenas o hash da senha de um usuário.
+  updateSenhaHash(id: string, senhaHash: string) {
+    return this.prisma.usuario.update({ where: { id }, data: { senhaHash } });
+  }
 }

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { Public } from './public.decorator';
 import { CurrentUser, AuthUser } from './current-user.decorator';
 
@@ -16,6 +17,15 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
+  }
+
+  // Troca de senha a partir da tela de login (público), exigindo senha atual.
+  // Limite estrito para evitar abuso/força bruta.
+  @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Post('alterar-senha')
+  alterarSenha(@Body() dto: AlterarSenhaDto) {
+    return this.auth.alterarSenha(dto);
   }
 
   // Protegido pelo JwtAuthGuard global. Usado pelo front para reidratar a sessão.

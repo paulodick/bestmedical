@@ -1,8 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 
 @Injectable()
 export class AuthService {
@@ -33,6 +38,27 @@ export class AuthService {
         perfil: user.perfil,
       },
     };
+  }
+
+  // Troca de senha a partir da tela de login (sem sessão ativa).
+  // Exige e-mail + senha atual corretos. Não revela se o e-mail existe.
+  async alterarSenha(dto: AlterarSenhaDto) {
+    const user = await this.users.findByEmail(dto.email);
+    const ok =
+      !!user &&
+      user.ativo &&
+      (await bcrypt.compare(dto.senhaAtual, user.senhaHash));
+    if (!ok) {
+      throw new UnauthorizedException('E-mail ou senha atual inválidos.');
+    }
+    if (dto.novaSenha === dto.senhaAtual) {
+      throw new BadRequestException(
+        'A nova senha deve ser diferente da atual.',
+      );
+    }
+    const novoHash = await bcrypt.hash(dto.novaSenha, 10);
+    await this.users.updateSenhaHash(user.id, novoHash);
+    return { ok: true };
   }
 
   // Utilitário para gerar hash (usado no seed)
