@@ -170,7 +170,35 @@ export class ClientesService {
       };
     }
 
-    // 2) ReceitaWS (fallback)
+    // 2) MinhaReceita (mesmo formato da BrasilAPI) — útil quando a BrasilAPI
+    //    está com limite de requisições atingido.
+    const m = await this.getJson(`https://minhareceita.org/${digitos}`);
+    if (m && (m.razao_social || m.nome_fantasia)) {
+      const tel = (m.ddd_telefone_1 || m.ddd_telefone_2 || '').toString().trim();
+      return {
+        encontrado: true,
+        fonte: 'receita',
+        cnpj: this.formatarCnpj(digitos),
+        empresa: (m.nome_fantasia || m.razao_social || '').toString().trim(),
+        cep: (m.cep || '').toString().replace(/\D/g, ''),
+        endereco: [m.descricao_tipo_de_logradouro, m.logradouro]
+          .filter(Boolean)
+          .join(' ')
+          .trim(),
+        enderecoNumero: (m.numero || '').toString(),
+        complemento: (m.complemento || '').toString(),
+        bairro: (m.bairro || '').toString(),
+        cidade: (m.municipio || '').toString(),
+        estado: (m.uf || '').toString(),
+        pais: 'Brasil',
+        solicitante: '',
+        setor: '',
+        telefone: tel,
+        email: (m.email || '').toString(),
+      };
+    }
+
+    // 3) ReceitaWS (fallback)
     const r = await this.getJson(`https://receitaws.com.br/v1/cnpj/${digitos}`);
     if (r && r.status === 'OK' && (r.nome || r.fantasia)) {
       return {
