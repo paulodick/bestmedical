@@ -13,6 +13,7 @@ import { OrdensServicoModule } from './ordens-servico/ordens-servico.module';
 import { ContratosModule } from './contratos/contratos.module';
 import { FollowUpsModule } from './follow-ups/follow-ups.module';
 import { CepModule } from './cep/cep.module';
+import { FinanceiroModule } from './financeiro/financeiro.module';
 import { EmailModule } from './email/email.module';
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -40,6 +41,7 @@ import { RolesGuard } from './auth/roles.guard';
     FollowUpsModule,
     CepModule,
     EmailModule,
+    FinanceiroModule,
   ],
   controllers: [HealthController],
   providers: [

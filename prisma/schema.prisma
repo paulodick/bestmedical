@@ -435,3 +435,31 @@ model ItemPropostaEquip {
   @@index([propostaId])
   @@map("itens_proposta_equip")
 }
+
+// ===================== Despesa (Controle Financeiro) =====================
+// Registro de saídas financeiras (contas a pagar / pagas). Espelha a aba
+// "Despesas" da planilha de controle. Valor armazenado em centavos (Int) e
+// exposto em reais pela API, seguindo a convenção dos orçamentos.
+model Despesa {
+  id            String    @id @default(uuid())
+  // Data de competência/vencimento (yyyy-mm-dd no fuso local, guardada em UTC).
+  data          DateTime
+  fornecedor    String
+  // Categoria livre (ex.: Peças, Impostos, Salários, Transporte...).
+  categoria     String?
+  descricao     String?
+  valorCentavos Int       @map("valor_centavos")
+  // Situação de pagamento.
+  pago          Boolean   @default(false)
+  // Data em que foi efetivamente paga (opcional).
+  dataPagamento DateTime? @map("data_pagamento")
+  // Projeto/centro de custo opcional (ex.: nome do hospital/contrato).
+  projeto       String?
+  observacoes   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([data])
+  @@index([pago])
+  @@map("despesas")
+}
