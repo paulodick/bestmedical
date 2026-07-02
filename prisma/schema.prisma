@@ -344,6 +344,9 @@ model Proposta {
   statusCancelado          Boolean   @default(false) @map("status_cancelado")
   // Data prevista do recebimento (usada p/ acionar Atrasado automaticamente)
   dataPagamento            DateTime? @map("data_pagamento") @db.Date
+  // Data de início da vigência do contrato. Enquanto vazia, o contrato NÃO
+  // entra no Controle Financeiro (pagamento mensal ainda não ativado).
+  inicioContrato           DateTime? @map("inicio_contrato") @db.Date
   enviadoEm                DateTime? @map("enviado_em")
 
   // Contrato assinado (PDF) carregado pelo usuário, armazenado em base64.

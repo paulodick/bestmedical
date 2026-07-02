@@ -158,6 +158,7 @@ export class ContratosService {
       data: {
         numero,
         data: dto.data ? new Date(dto.data) : new Date(),
+        inicioContrato: dto.inicioContrato ? new Date(dto.inicioContrato) : null,
         clienteId,
         contatoId,
         criadoPor: userId,
@@ -246,6 +247,13 @@ export class ContratosService {
         data: {
           ...(dto.numero ? { numero: dto.numero } : {}),
           ...(dto.data ? { data: new Date(dto.data) } : {}),
+          ...(dto.inicioContrato !== undefined
+            ? {
+                inicioContrato: dto.inicioContrato
+                  ? new Date(dto.inicioContrato)
+                  : null,
+              }
+            : {}),
           clienteNomeSnap: dto.empresa,
           clienteCnpjSnap: dto.cnpj,
           solicitanteSnap: dto.solicitante,
@@ -586,6 +594,8 @@ export class ContratosService {
       atrasado: p.statusAtrasado ?? false,
       cancelado: p.statusCancelado ?? false,
       dataPagamento: p.dataPagamento ? isoDate(p.dataPagamento) : null,
+      // início da vigência do contrato (gate do Controle Financeiro)
+      inicioContrato: p.inicioContrato ? isoDate(p.inicioContrato) : null,
       // envio
       enviadoEm: p.enviadoEm ? new Date(p.enviadoEm).toISOString() : null,
       // contrato assinado carregado (somente metadados; o arquivo é servido por rota própria)

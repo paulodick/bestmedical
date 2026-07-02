@@ -25,6 +25,8 @@ export class CreatePropostaDto {
   // Identificação — numero é opcional (servidor gera se vazio)
   @IsOptional() @IsString() numero?: string;
   @IsOptional() @IsString() data?: string;
+  // Data de início da vigência do contrato (ISO yyyy-mm-dd) ou null.
+  @IsOptional() @IsString() inicioContrato?: string | null;
 
   // Vínculo direto OU dados avulsos do cliente/solicitante
   @IsOptional() @IsString() clienteId?: string;
