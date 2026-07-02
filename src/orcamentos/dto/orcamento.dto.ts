@@ -14,6 +14,10 @@ import {
 export class ItemDto {
   @IsOptional() @IsString() codigo?: string;
   @IsOptional() @IsString() descricao?: string;
+  // O frontend/serialização usa 'item' como nome do campo de descrição.
+  // Aceitamos ambos para não perder a descrição ao reeditar (ex.: orçamentos
+  // importados). A gravação usa (descricao ?? item).
+  @IsOptional() @IsString() item?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) quantidade?: number;
   // valor em reais (decimal) — convertido para centavos no servidor
   @IsOptional() @Type(() => Number) @IsNumber() valorItem?: number;

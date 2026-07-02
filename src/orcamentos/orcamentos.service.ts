@@ -212,7 +212,7 @@ export class OrcamentosService {
           create: (dto.itens || []).map((it, i) => ({
             ordem: i,
             codigo: it.codigo || '',
-            descricao: it.descricao || '',
+            descricao: it.descricao ?? it.item ?? '',
             quantidade: it.quantidade || 1,
             valorItemCentavos: reaisParaCentavos(it.valorItem),
           })),
@@ -302,7 +302,7 @@ export class OrcamentosService {
             create: (dto.itens || []).map((it, i) => ({
               ordem: i,
               codigo: it.codigo || '',
-              descricao: it.descricao || '',
+              descricao: it.descricao ?? it.item ?? '',
               quantidade: it.quantidade || 1,
               valorItemCentavos: reaisParaCentavos(it.valorItem),
             })),
