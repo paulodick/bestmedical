@@ -32,4 +32,16 @@ export class CreateDespesaDto {
   @IsOptional() @IsString() @MaxLength(400) observacoes?: string;
 }
 
-export class UpdateDespesaDto extends CreateDespesaDto {}
+// Atualização parcial (PATCH): todos os campos são opcionais, permitindo
+// enviar apenas o que mudou (ex.: { pago: false }) sem reenviar o resto.
+export class UpdateDespesaDto {
+  @IsOptional() @IsISO8601() data?: string;
+  @IsOptional() @IsString() @MaxLength(160) fornecedor?: string;
+  @IsOptional() @IsString() @MaxLength(80) categoria?: string;
+  @IsOptional() @IsString() @MaxLength(400) descricao?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) valor?: number;
+  @IsOptional() @IsBoolean() pago?: boolean;
+  @IsOptional() @IsISO8601() dataPagamento?: string;
+  @IsOptional() @IsString() @MaxLength(160) projeto?: string;
+  @IsOptional() @IsString() @MaxLength(400) observacoes?: string;
+}
