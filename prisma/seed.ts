@@ -20,26 +20,45 @@ async function main() {
   console.log(`Usuário admin pronto: ${admin.usuario} (senha: ${senha})`);
 
   // Usuário Paulo — admin master. Login: 'paulodick'.
+  // A senha vem da variável de ambiente SEED_PAULO_PASSWORD (configurada no
+  // painel do Render). Nunca escrevemos a senha em texto puro no código.
   const pauloUsuario = 'paulodick';
   const pauloEmail = 'paulo@bestmedical.com.br';
-  const pauloSenhaHash = await bcrypt.hash('__SENHA_REMOVIDA__', 10);
-  const paulo = await prisma.usuario.upsert({
-    where: { usuario: pauloUsuario },
-    update: {
-      senhaHash: pauloSenhaHash,
-      ativo: true,
-      perfil: 'admin',
-      email: pauloEmail,
-    },
-    create: {
-      nome: 'Paulo Dick',
-      usuario: pauloUsuario,
-      email: pauloEmail,
-      senhaHash: pauloSenhaHash,
-      perfil: 'admin',
-    },
-  });
-  console.log(`Usuário Paulo pronto: ${paulo.usuario}`);
+  const pauloSenha = process.env.SEED_PAULO_PASSWORD;
+  if (pauloSenha) {
+    const pauloSenhaHash = await bcrypt.hash(pauloSenha, 10);
+    const paulo = await prisma.usuario.upsert({
+      where: { usuario: pauloUsuario },
+      update: {
+        senhaHash: pauloSenhaHash,
+        ativo: true,
+        perfil: 'admin',
+        email: pauloEmail,
+      },
+      create: {
+        nome: 'Paulo Dick',
+        usuario: pauloUsuario,
+        email: pauloEmail,
+        senhaHash: pauloSenhaHash,
+        perfil: 'admin',
+      },
+    });
+    console.log(`Usuário Paulo pronto: ${paulo.usuario}`);
+  } else {
+    // Sem a variável definida, apenas garante que a conta exista (sem tocar na
+    // senha), para não sobrescrever uma senha já definida pelo usuário.
+    const existente = await prisma.usuario.findUnique({
+      where: { usuario: pauloUsuario },
+    });
+    if (!existente) {
+      console.warn(
+        'SEED_PAULO_PASSWORD não definida e usuário paulodick inexistente: ' +
+          'defina a variável de ambiente para criar a conta admin master.',
+      );
+    } else {
+      console.log('Usuário Paulo já existe; senha preservada.');
+    }
+  }
 
   // Cliente de exemplo (opcional)
   const total = await prisma.cliente.count();

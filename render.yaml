@@ -29,6 +29,11 @@ services:
         value: admin123
       - key: SEED_ADMIN_NOME
         value: Administrador
+      # Senha do admin master 'paulodick'. Definida como secreta no painel do
+      # Render (nunca fica no código). Deixe em branco após o primeiro deploy
+      # se quiser que a senha alterada pelo usuário seja preservada.
+      - key: SEED_PAULO_PASSWORD
+        sync: false
       # ===== E-mail — preencha no painel do Render =====
       # Preferencial: API HTTP do Brevo (contorna o bloqueio de portas
       # SMTP de saida no plano free do Render). Se BREVO_API_KEY estiver
