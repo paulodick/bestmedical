@@ -68,6 +68,16 @@ export class CrmService {
     return { ok: true, removidos: r.count };
   }
 
+  // Exclui em lote os contatos cujos ids foram selecionados na tela.
+  async removerLote(ids: string[]) {
+    const unicos = Array.from(new Set((ids || []).filter(Boolean)));
+    if (!unicos.length) return { ok: true, removidos: 0 };
+    const r = await this.prisma.crmContato.deleteMany({
+      where: { id: { in: unicos } },
+    });
+    return { ok: true, removidos: r.count };
+  }
+
   private async ensure(id: string) {
     const c = await this.prisma.crmContato.findUnique({ where: { id } });
     if (!c) throw new NotFoundException('Contato não encontrado');

@@ -12,6 +12,7 @@ import {
 import { CrmService } from './crm.service';
 import {
   CreateCrmContatoDto,
+  ExcluirContatosDto,
   ImportarContatosDto,
   UpdateCrmContatoDto,
 } from './dto/crm-contato.dto';
@@ -40,6 +41,14 @@ export class CrmController {
   @Post('importar')
   importar(@Body() dto: ImportarContatosDto) {
     return this.crm.importar(dto);
+  }
+
+  // Exclusão em lote dos contatos selecionados (checkbox na tela).
+  // Usa POST (com corpo) para carregar a lista de ids com segurança.
+  @Roles('admin')
+  @Post('excluir-lote')
+  removerLote(@Body() dto: ExcluirContatosDto) {
+    return this.crm.removerLote(dto.ids);
   }
 
   @Roles('admin', 'operador')

@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsInt,
@@ -41,6 +43,14 @@ export class ImportarContatoItemDto {
   @IsOptional() @IsString() @MaxLength(40) telefonePessoal?: string;
   @IsOptional() @IsString() @MaxLength(160) email?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5) relacionamento?: number;
+}
+
+// ===== Exclusão em lote (vários contatos selecionados de uma vez) =====
+export class ExcluirContatosDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  ids: string[];
 }
 
 export class ImportarContatosDto {
