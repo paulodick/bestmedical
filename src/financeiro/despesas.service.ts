@@ -114,20 +114,26 @@ export class DespesasService {
 
   async update(id: string, dto: UpdateDespesaDto): Promise<DespesaApi> {
     await this.ensure(id);
-    const d = await this.prisma.despesa.update({
-      where: { id },
-      data: {
-        data: isoParaData(dto.data),
-        fornecedor: dto.fornecedor,
-        categoria: dto.categoria ?? null,
-        descricao: dto.descricao ?? null,
-        valorCentavos: reaisParaCentavos(dto.valor),
-        pago: dto.pago ?? false,
-        dataPagamento: dto.dataPagamento ? isoParaData(dto.dataPagamento) : null,
-        projeto: dto.projeto ?? null,
-        observacoes: dto.observacoes ?? null,
-      },
-    });
+
+    // Atualização parcial (PATCH): só altera os campos realmente enviados.
+    // Assim marcar apenas { pago: false } não zera os demais campos.
+    const data: Prisma.DespesaUpdateInput = {};
+    if (dto.data !== undefined) data.data = isoParaData(dto.data);
+    if (dto.fornecedor !== undefined) data.fornecedor = dto.fornecedor;
+    if (dto.categoria !== undefined) data.categoria = dto.categoria ?? null;
+    if (dto.descricao !== undefined) data.descricao = dto.descricao ?? null;
+    if (dto.valor !== undefined)
+      data.valorCentavos = reaisParaCentavos(dto.valor);
+    if (dto.pago !== undefined) data.pago = dto.pago;
+    if (dto.dataPagamento !== undefined)
+      data.dataPagamento = dto.dataPagamento
+        ? isoParaData(dto.dataPagamento)
+        : null;
+    if (dto.projeto !== undefined) data.projeto = dto.projeto ?? null;
+    if (dto.observacoes !== undefined)
+      data.observacoes = dto.observacoes ?? null;
+
+    const d = await this.prisma.despesa.update({ where: { id }, data });
     return this.toApi(d);
   }
 
