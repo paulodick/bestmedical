@@ -466,3 +466,53 @@ model Despesa {
   @@index([pago])
   @@map("despesas")
 }
+
+// ===== Recebível avulso =====
+// Recebimento manual (avulso), sem vínculo com orçamento ou proposta.
+// Aparece no Controle Financeiro (Recebíveis) junto com os automáticos.
+model Recebivel {
+  id            String    @id @default(uuid())
+  // Data de competência/emissão (yyyy-mm-dd no fuso local, guardada em UTC).
+  data          DateTime
+  // Identificação livre do pagador.
+  empresa       String
+  cnpj          String?
+  descricao     String?
+  valorCentavos Int       @map("valor_centavos")
+  // Situação de recebimento.
+  pago          Boolean   @default(false)
+  dataPagamento DateTime? @map("data_pagamento")
+  observacoes   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([data])
+  @@index([pago])
+  @@map("recebiveis")
+}
+
+// ===== Lançamento financeiro pessoal =====
+// Controle Financeiro Pessoal (exclusivo do admin master). Totalmente separado
+// do financeiro da empresa. Lançamentos livres de receita/despesa por pessoa.
+model LancamentoPessoal {
+  id            String    @id @default(uuid())
+  data          DateTime
+  // 'receita' (entrada) ou 'despesa' (saída).
+  tipo          String
+  // Pessoa a quem o lançamento pertence (ex.: Paulo, Luisa).
+  pessoa        String
+  categoria     String?
+  descricao     String?
+  valorCentavos Int       @map("valor_centavos")
+  // Situação: pago (despesa) ou recebido (receita).
+  pago          Boolean   @default(false)
+  dataPagamento DateTime? @map("data_pagamento")
+  observacoes   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([data])
+  @@index([tipo])
+  @@index([pessoa])
+  @@map("lancamentos_pessoais")
+}

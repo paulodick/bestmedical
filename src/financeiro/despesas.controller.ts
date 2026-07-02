@@ -10,7 +10,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { DespesasService } from './despesas.service';
+import { RecebiveisService } from './recebiveis.service';
+import { PessoalService } from './pessoal.service';
 import { CreateDespesaDto, UpdateDespesaDto } from './dto/despesa.dto';
+import {
+  CreateRecebivelDto,
+  UpdateRecebivelDto,
+} from './dto/recebivel.dto';
+import {
+  CreateLancamentoPessoalDto,
+  UpdateLancamentoPessoalDto,
+} from './dto/lancamento-pessoal.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -20,7 +30,11 @@ import { Roles } from '../auth/roles.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('financeiro')
 export class DespesasController {
-  constructor(private despesas: DespesasService) {}
+  constructor(
+    private despesas: DespesasService,
+    private recebiveis: RecebiveisService,
+    private pessoal: PessoalService,
+  ) {}
 
   // Resumo consolidado: KPIs + fluxo de caixa mensal + despesas por categoria.
   @Roles('admin')
@@ -51,5 +65,64 @@ export class DespesasController {
   @Delete('despesas/:id')
   remove(@Param('id') id: string) {
     return this.despesas.remove(id);
+  }
+
+  // ===== Recebíveis avulsos (manuais) =====
+  @Roles('admin')
+  @Get('recebiveis')
+  listRecebiveis(@Query() q: PaginationDto) {
+    return this.recebiveis.list(q);
+  }
+
+  @Roles('admin')
+  @Post('recebiveis')
+  createRecebivel(@Body() dto: CreateRecebivelDto) {
+    return this.recebiveis.create(dto);
+  }
+
+  @Roles('admin')
+  @Put('recebiveis/:id')
+  updateRecebivel(@Param('id') id: string, @Body() dto: UpdateRecebivelDto) {
+    return this.recebiveis.update(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('recebiveis/:id')
+  removeRecebivel(@Param('id') id: string) {
+    return this.recebiveis.remove(id);
+  }
+
+  // ===== Controle Financeiro Pessoal (exclusivo admin master) =====
+  @Roles('admin')
+  @Get('pessoal/resumo')
+  resumoPessoal() {
+    return this.pessoal.resumo();
+  }
+
+  @Roles('admin')
+  @Get('pessoal')
+  listPessoal(@Query() q: PaginationDto) {
+    return this.pessoal.list(q);
+  }
+
+  @Roles('admin')
+  @Post('pessoal')
+  createPessoal(@Body() dto: CreateLancamentoPessoalDto) {
+    return this.pessoal.create(dto);
+  }
+
+  @Roles('admin')
+  @Put('pessoal/:id')
+  updatePessoal(
+    @Param('id') id: string,
+    @Body() dto: UpdateLancamentoPessoalDto,
+  ) {
+    return this.pessoal.update(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('pessoal/:id')
+  removePessoal(@Param('id') id: string) {
+    return this.pessoal.remove(id);
   }
 }
