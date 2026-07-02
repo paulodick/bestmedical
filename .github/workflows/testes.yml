@@ -1,0 +1,31 @@
+name: Testes
+
+# Roda os testes unitários a cada push e em pull requests.
+# Foco: proteger a lógica financeira do orçamento (totais, descontos, parcelas)
+# contra regressões.
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    name: Testes unitários (Jest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # npm ci dispara o postinstall (prisma generate), que roda offline
+      # e é necessário para o TypeScript compilar os imports do serviço.
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar testes
+        run: npm test
