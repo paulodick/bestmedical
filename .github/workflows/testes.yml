@@ -1,8 +1,10 @@
 name: Testes
 
-# Roda os testes unitários a cada push e em pull requests.
-# Foco: proteger a lógica financeira do orçamento (totais, descontos, parcelas)
-# contra regressões.
+# Roda os testes a cada push e em pull requests.
+# Cobertura:
+#  - lógica financeira do orçamento (totais, descontos, parcelas);
+#  - integração do serviço de clientes (autocompletar por CNPJ: casos de borda,
+#    normalização de máscara, autofill determinístico e consulta pública).
 on:
   push:
   pull_request:
