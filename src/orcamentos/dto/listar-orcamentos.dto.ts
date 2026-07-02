@@ -9,6 +9,9 @@ export const STATUS_KEYS = [
   'ordemServico',
   'pagamentoRealizado',
   'reprovado',
+  'pago',
+  'atrasado',
+  'cancelado',
 ] as const;
 
 export type StatusKey = (typeof STATUS_KEYS)[number];
@@ -34,4 +37,10 @@ export class UpdateStatusDto {
   @IsOptional() ordemServico?: boolean;
   @IsOptional() pagamentoRealizado?: boolean;
   @IsOptional() reprovado?: boolean;
+  // Status financeiros (Controle Financeiro)
+  @IsOptional() pago?: boolean;
+  @IsOptional() atrasado?: boolean;
+  @IsOptional() cancelado?: boolean;
+  // Data prevista do recebimento (yyyy-mm-dd) ou null para limpar
+  @IsOptional() @IsString() dataPagamento?: string | null;
 }

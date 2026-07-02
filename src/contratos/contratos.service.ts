@@ -379,6 +379,14 @@ export class ContratosService {
     if (dto.assinado !== undefined) data.statusAssinado = dto.assinado;
     if (dto.vigente !== undefined) data.statusVigente = dto.vigente;
     if (dto.reprovado !== undefined) data.statusReprovado = dto.reprovado;
+    // Status financeiros (Controle Financeiro)
+    if (dto.pago !== undefined) data.statusPago = dto.pago;
+    if (dto.atrasado !== undefined) data.statusAtrasado = dto.atrasado;
+    if (dto.cancelado !== undefined) data.statusCancelado = dto.cancelado;
+    if (dto.dataPagamento !== undefined)
+      data.dataPagamento = dto.dataPagamento
+        ? new Date(dto.dataPagamento)
+        : null;
 
     const prop = await this.prisma.proposta.update({
       where: { id },
@@ -573,6 +581,11 @@ export class ContratosService {
       assinado: p.statusAssinado ?? false,
       vigente: p.statusVigente ?? false,
       reprovado: p.statusReprovado ?? false,
+      // status financeiros (Controle Financeiro)
+      pago: p.statusPago ?? false,
+      atrasado: p.statusAtrasado ?? false,
+      cancelado: p.statusCancelado ?? false,
+      dataPagamento: p.dataPagamento ? isoDate(p.dataPagamento) : null,
       // envio
       enviadoEm: p.enviadoEm ? new Date(p.enviadoEm).toISOString() : null,
       // contrato assinado carregado (somente metadados; o arquivo é servido por rota própria)

@@ -347,6 +347,14 @@ export class OrcamentosService {
     if (dto.pagamentoRealizado !== undefined)
       data.statusPagamentoRealizado = dto.pagamentoRealizado;
     if (dto.reprovado !== undefined) data.statusReprovado = dto.reprovado;
+    // Status financeiros (Controle Financeiro)
+    if (dto.pago !== undefined) data.statusPago = dto.pago;
+    if (dto.atrasado !== undefined) data.statusAtrasado = dto.atrasado;
+    if (dto.cancelado !== undefined) data.statusCancelado = dto.cancelado;
+    if (dto.dataPagamento !== undefined)
+      data.dataPagamento = dto.dataPagamento
+        ? new Date(dto.dataPagamento)
+        : null;
 
     const orc = await this.prisma.orcamento.update({
       where: { id },
@@ -578,6 +586,12 @@ export class OrcamentosService {
       ordemServico: o.statusOrdemServico,
       pagamentoRealizado: o.statusPagamentoRealizado,
       reprovado: o.statusReprovado ?? false,
+      // status financeiros (Controle Financeiro)
+      pago: o.statusPago ?? false,
+      atrasado: o.statusAtrasado ?? false,
+      cancelado: o.statusCancelado ?? false,
+      // data prevista do recebimento (yyyy-mm-dd) ou null
+      dataPagamento: o.dataPagamento ? isoDate(o.dataPagamento) : null,
       // quando foi enviado (usado na coluna "Enviado" do Controle)
       enviadoEm: o.enviadoEm ? new Date(o.enviadoEm).toISOString() : null,
       // listas

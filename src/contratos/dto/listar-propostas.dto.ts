@@ -11,6 +11,9 @@ export const STATUS_KEYS_PROPOSTA = [
   'assinado',
   'vigente',
   'reprovado',
+  'pago',
+  'atrasado',
+  'cancelado',
 ] as const;
 
 export type StatusKeyProposta = (typeof STATUS_KEYS_PROPOSTA)[number];
@@ -40,6 +43,12 @@ export class UpdateStatusPropostaDto {
   @IsOptional() assinado?: boolean;
   @IsOptional() vigente?: boolean;
   @IsOptional() reprovado?: boolean;
+  // Status financeiros (Controle Financeiro)
+  @IsOptional() pago?: boolean;
+  @IsOptional() atrasado?: boolean;
+  @IsOptional() cancelado?: boolean;
+  // Data prevista do recebimento (yyyy-mm-dd) ou null para limpar
+  @IsOptional() @IsString() dataPagamento?: string | null;
 }
 
 // Upload do contrato assinado (PDF) em base64.
