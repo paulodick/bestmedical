@@ -17,7 +17,8 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-    const user = await this.users.findByEmail(dto.email);
+    // Login por usuário, sem diferenciar maiúsculas/minúsculas.
+    const user = await this.users.findByUsuario(dto.usuario);
     if (!user || !user.ativo) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
@@ -26,7 +27,12 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    const payload = { sub: user.id, email: user.email, perfil: user.perfil };
+    const payload = {
+      sub: user.id,
+      usuario: user.usuario,
+      email: user.email,
+      perfil: user.perfil,
+    };
     const accessToken = await this.jwt.signAsync(payload);
 
     return {
@@ -34,6 +40,7 @@ export class AuthService {
       user: {
         id: user.id,
         nome: user.nome,
+        usuario: user.usuario,
         email: user.email,
         perfil: user.perfil,
       },
@@ -41,15 +48,15 @@ export class AuthService {
   }
 
   // Troca de senha a partir da tela de login (sem sessão ativa).
-  // Exige e-mail + senha atual corretos. Não revela se o e-mail existe.
+  // Exige usuário + senha atual corretos. Não revela se o usuário existe.
   async alterarSenha(dto: AlterarSenhaDto) {
-    const user = await this.users.findByEmail(dto.email);
+    const user = await this.users.findByUsuario(dto.usuario);
     const ok =
       !!user &&
       user.ativo &&
       (await bcrypt.compare(dto.senhaAtual, user.senhaHash));
     if (!ok) {
-      throw new UnauthorizedException('E-mail ou senha atual inválidos.');
+      throw new UnauthorizedException('Usuário ou senha atual inválidos.');
     }
     if (dto.novaSenha === dto.senhaAtual) {
       throw new BadRequestException(

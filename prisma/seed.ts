@@ -10,27 +10,36 @@ async function main() {
 
   const senhaHash = await bcrypt.hash(senha, 10);
 
+  // Login por usuário (não mais por e-mail). Slug do admin genérico.
+  const adminUsuario = 'administrador';
   const admin = await prisma.usuario.upsert({
-    where: { email },
+    where: { usuario: adminUsuario },
     update: {},
-    create: { nome, email, senhaHash, perfil: 'admin' },
+    create: { nome, usuario: adminUsuario, email, senhaHash, perfil: 'admin' },
   });
-  console.log(`Usuário admin pronto: ${admin.email} (senha: ${senha})`);
+  console.log(`Usuário admin pronto: ${admin.usuario} (senha: ${senha})`);
 
-  // Usuário Paulo — único com acesso ao CRM (controle no frontend).
+  // Usuário Paulo — admin master. Login: 'paulodick'.
+  const pauloUsuario = 'paulodick';
   const pauloEmail = 'paulo@bestmedical.com.br';
-  const pauloSenhaHash = await bcrypt.hash('Abcd123a', 10);
+  const pauloSenhaHash = await bcrypt.hash('__SENHA_REMOVIDA__', 10);
   const paulo = await prisma.usuario.upsert({
-    where: { email: pauloEmail },
-    update: { senhaHash: pauloSenhaHash, ativo: true, perfil: 'admin' },
+    where: { usuario: pauloUsuario },
+    update: {
+      senhaHash: pauloSenhaHash,
+      ativo: true,
+      perfil: 'admin',
+      email: pauloEmail,
+    },
     create: {
-      nome: 'Paulo',
+      nome: 'Paulo Dick',
+      usuario: pauloUsuario,
       email: pauloEmail,
       senhaHash: pauloSenhaHash,
       perfil: 'admin',
     },
   });
-  console.log(`Usuário Paulo pronto: ${paulo.email}`);
+  console.log(`Usuário Paulo pronto: ${paulo.usuario}`);
 
   // Cliente de exemplo (opcional)
   const total = await prisma.cliente.count();

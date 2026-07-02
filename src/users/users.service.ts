@@ -9,6 +9,14 @@ export class UsersService {
     return this.prisma.usuario.findUnique({ where: { email } });
   }
 
+  // Busca por usuário de login, sem diferenciar maiúsculas/minúsculas.
+  // O valor é sempre armazenado em minúsculas, então normalizamos a consulta.
+  findByUsuario(usuario: string) {
+    return this.prisma.usuario.findUnique({
+      where: { usuario: (usuario || '').trim().toLowerCase() },
+    });
+  }
+
   findById(id: string) {
     return this.prisma.usuario.findUnique({ where: { id } });
   }

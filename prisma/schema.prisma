@@ -19,6 +19,8 @@ enum Perfil {
 model Usuario {
   id        String   @id @default(uuid())
   nome      String
+  // Login por usuário (nome+sobrenome juntos, minúsculo, sem espaços). Único.
+  usuario   String   @unique
   email     String   @unique
   senhaHash String   @map("senha_hash")
   perfil    Perfil   @default(operador)

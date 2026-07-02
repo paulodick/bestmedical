@@ -59,14 +59,14 @@ export class FollowUpsService {
   }
 
   // Exclui um follow-up. Permitido apenas ao PRÓPRIO autor ou ao
-  // administrador master (paulo@bestmedical.com.br), para evitar problemas.
+  // administrador master (usuário 'paulodick'), para evitar problemas.
   async remove(id: string, user?: AuthUser) {
     const fu = await this.prisma.followUp.findUnique({ where: { id } });
     if (!fu) throw new NotFoundException('Follow-up não encontrado.');
 
     const ehAutor = !!user?.id && fu.autorId === user.id;
     const ehAdminMaster =
-      (user?.email || '').trim().toLowerCase() === 'paulo@bestmedical.com.br';
+      (user?.usuario || '').trim().toLowerCase() === 'paulodick';
 
     if (!ehAutor && !ehAdminMaster) {
       throw new ForbiddenException(

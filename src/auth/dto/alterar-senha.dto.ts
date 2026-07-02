@@ -1,10 +1,11 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsString, MinLength } from 'class-validator';
 
-// Usado na tela de login (usuário NÃO autenticado): exige e-mail + senha atual
+// Usado na tela de login (usuário NÃO autenticado): exige usuário + senha atual
 // para autorizar a troca, evitando que terceiros alterem a senha de outra conta.
 export class AlterarSenhaDto {
-  @IsEmail()
-  email: string;
+  @IsString()
+  @MinLength(3)
+  usuario: string;
 
   @IsString()
   @MinLength(4)

@@ -5,6 +5,7 @@ import { UsersService } from '../users/users.service';
 
 export interface JwtPayload {
   sub: string;
+  usuario?: string;
   email: string;
   perfil: string;
 }
@@ -33,6 +34,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Usuário inválido ou inativo');
     }
     // Anexado em req.user
-    return { id: user.id, email: user.email, perfil: user.perfil, nome: user.nome };
+    return {
+      id: user.id,
+      usuario: user.usuario,
+      email: user.email,
+      perfil: user.perfil,
+      nome: user.nome,
+    };
   }
 }
