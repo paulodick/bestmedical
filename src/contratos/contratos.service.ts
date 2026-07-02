@@ -118,7 +118,17 @@ export class ContratosService {
       quantidade: 1,
       valorItemCentavos: reaisParaCentavos(e.valorContrato),
     }));
-    return calcTotais(itensCalc, dto.descontoPercent || 0);
+    const totais = calcTotais(itensCalc, dto.descontoPercent || 0);
+    // Total manual (override): quando informado (> 0), passa a valer como
+    // total efetivo mensal da proposta.
+    const temManual =
+      dto.totalManual !== undefined &&
+      dto.totalManual !== null &&
+      Number(dto.totalManual) > 0;
+    const totalManualCentavos = temManual
+      ? reaisParaCentavos(dto.totalManual)
+      : null;
+    return { ...totais, totalManualCentavos };
   }
 
   // ===== Resolve o texto padrão de referência para o diff de customizações =====
@@ -168,7 +178,9 @@ export class ContratosService {
         descontoPercent: dto.descontoPercent || 0,
         subtotalCentavos: totais.subtotalCentavos,
         descontoCentavos: totais.descontoCentavos,
-        totalCentavos: totais.totalCentavos,
+        // total efetivo = manual (override) quando houver, senão o calculado
+        totalCentavos: totais.totalManualCentavos ?? totais.totalCentavos,
+        totalManualCentavos: totais.totalManualCentavos,
         // status
         statusEnviado: !!dto.enviado,
         // equipamentos
@@ -248,7 +260,9 @@ export class ContratosService {
           descontoPercent: dto.descontoPercent ?? 0,
           subtotalCentavos: totais.subtotalCentavos,
           descontoCentavos: totais.descontoCentavos,
-          totalCentavos: totais.totalCentavos,
+          // total efetivo = manual (override) quando houver, senão o calculado
+          totalCentavos: totais.totalManualCentavos ?? totais.totalCentavos,
+          totalManualCentavos: totais.totalManualCentavos,
           statusEnviado: !!dto.enviado,
           equipamentos: {
             create: (dto.equipamentos || []).map((e, i) => ({
@@ -541,6 +555,10 @@ export class ContratosService {
       descontoPercent: p.descontoPercent ?? 0,
       subtotal: centavosParaReais(p.subtotalCentavos),
       desconto: centavosParaReais(p.descontoCentavos),
+      totalManual:
+        p.totalManualCentavos != null
+          ? centavosParaReais(p.totalManualCentavos)
+          : null,
       total: centavosParaReais(p.totalCentavos),
       // finalização
       textoFinal: p.textoFinal ?? '',

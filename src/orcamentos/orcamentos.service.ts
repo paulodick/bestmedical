@@ -128,6 +128,18 @@ export class OrcamentosService {
     }));
     const totais = calcTotais(itensCalc, dto.descontoPercent || 0);
 
+    // Total manual (override): quando informado (> 0), passa a valer como
+    // total efetivo do orçamento, preservando subtotal/desconto calculados
+    // apenas como referência. As parcelas passam a somar o total manual.
+    const temManual =
+      dto.totalManual !== undefined &&
+      dto.totalManual !== null &&
+      Number(dto.totalManual) > 0;
+    const totalManualCentavos = temManual
+      ? reaisParaCentavos(dto.totalManual)
+      : null;
+    const totalEfetivoCentavos = totalManualCentavos ?? totais.totalCentavos;
+
     const parcelasEntrada: ParcelaCalc[] = (dto.parcelas || []).map((p) => ({
       numero: p.numero,
       data: p.data || '',
@@ -137,17 +149,17 @@ export class OrcamentosService {
     const parcelas = normalizarParcelas(
       parcelasEntrada,
       dto.numParcelas || 1,
-      totais.totalCentavos,
+      totalEfetivoCentavos,
     );
 
-    return { totais, parcelas, itensCalc };
+    return { totais, parcelas, itensCalc, totalManualCentavos };
   }
 
   // ===== Criar =====
   async create(dto: CreateOrcamentoDto, userId?: string) {
     const numero = dto.numero?.trim() || (await this.proximoNumero());
     const { clienteId, contatoId } = await this.resolverCliente(dto);
-    const { totais, parcelas } = this.montarDados(dto);
+    const { totais, parcelas, totalManualCentavos } = this.montarDados(dto);
 
     const orc = await this.prisma.orcamento.create({
       data: {
@@ -175,7 +187,9 @@ export class OrcamentosService {
         numParcelas: dto.numParcelas || 1,
         subtotalCentavos: totais.subtotalCentavos,
         descontoCentavos: totais.descontoCentavos,
-        totalCentavos: totais.totalCentavos,
+        // total efetivo = manual (override) quando houver, senão o calculado
+        totalCentavos: totalManualCentavos ?? totais.totalCentavos,
+        totalManualCentavos,
         // finalização
         observacoes: dto.observacoes,
         textoFinal: dto.textoFinal ?? TEXTO_FINAL_PADRAO,
@@ -214,7 +228,7 @@ export class OrcamentosService {
   // ===== Atualizar (substitui itens e parcelas) =====
   async update(id: string, dto: UpdateOrcamentoDto) {
     const atual = await this.ensure(id);
-    const { totais, parcelas } = this.montarDados(dto);
+    const { totais, parcelas, totalManualCentavos } = this.montarDados(dto);
 
     const orc = await this.prisma.$transaction(async (tx) => {
       // remove filhos e recria (estratégia simples e previsível)
@@ -264,9 +278,11 @@ export class OrcamentosService {
           descricaoVisita: dto.descricaoVisita,
           descontoPercent: dto.descontoPercent ?? 0,
           numParcelas: dto.numParcelas ?? 1,
+          totalManualCentavos,
           subtotalCentavos: totais.subtotalCentavos,
           descontoCentavos: totais.descontoCentavos,
-          totalCentavos: totais.totalCentavos,
+          // total efetivo = manual (override) quando houver, senão o calculado
+          totalCentavos: totalManualCentavos ?? totais.totalCentavos,
           observacoes: dto.observacoes,
           textoFinal: dto.textoFinal ?? TEXTO_FINAL_PADRAO,
           statusEnviado: !!dto.enviado,
@@ -530,6 +546,11 @@ export class OrcamentosService {
       subtotal: centavosParaReais(o.subtotalCentavos),
       desconto: centavosParaReais(o.descontoCentavos),
       total: centavosParaReais(o.totalCentavos),
+      // total manual (override): null quando não houver. Em reais.
+      totalManual:
+        o.totalManualCentavos != null
+          ? centavosParaReais(o.totalManualCentavos)
+          : null,
       // finalização
       observacoes: o.observacoes ?? '',
       textoFinal: o.textoFinal ?? '',

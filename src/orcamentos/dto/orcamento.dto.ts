@@ -68,6 +68,9 @@ export class CreateOrcamentoDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
   descontoPercent?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) numParcelas?: number;
+  // Total manual (override) em reais. Quando > 0, prevalece sobre o total
+  // calculado pelos itens/desconto. null/0/undefined = usa o calculado.
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) totalManual?: number;
 
   // Finalização
   @IsOptional() @IsString() observacoes?: string;

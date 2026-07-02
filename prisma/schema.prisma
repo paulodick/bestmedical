@@ -126,6 +126,9 @@ model Orcamento {
   subtotalCentavos Int   @default(0) @map("subtotal_centavos")
   descontoCentavos Int   @default(0) @map("desconto_centavos")
   totalCentavos    Int   @default(0) @map("total_centavos")
+  // Total manual (override): quando preenchido, prevalece sobre o total
+  // calculado pelos itens/desconto. Usado para correção rápida no Controle.
+  totalManualCentavos Int? @map("total_manual_centavos")
 
   // Finalização
   observacoes String?
@@ -310,6 +313,8 @@ model Proposta {
   subtotalCentavos Int   @default(0) @map("subtotal_centavos")
   descontoCentavos Int   @default(0) @map("desconto_centavos")
   totalCentavos    Int   @default(0) @map("total_centavos")
+  // Total manual (override) mensal: prevalece sobre o total calculado.
+  totalManualCentavos Int? @map("total_manual_centavos")
 
   // Status / envio (mesmos status de controle do orçamento)
   statusEnviado            Boolean   @default(false) @map("status_enviado")

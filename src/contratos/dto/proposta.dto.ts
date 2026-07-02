@@ -57,6 +57,9 @@ export class CreatePropostaDto {
   // Resumo
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100)
   descontoPercent?: number;
+  // Total manual (override) mensal em reais. Quando > 0, prevalece sobre o
+  // total calculado pelos equipamentos/desconto.
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) totalManual?: number;
 
   // Finalização
   @IsOptional() @IsString() textoFinal?: string;
