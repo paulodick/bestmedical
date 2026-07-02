@@ -84,6 +84,11 @@ model CrmContato {
   telefone        String?
   telefonePessoal String?  @map("telefone_pessoal")
   email           String?
+  // Cidade/estado do contato. Preenchidos na importação cruzando o DDD do
+  // telefone e/ou a cidade/UF citada no nome. Cidade preenche o estado
+  // automaticamente; cidade ambígua (várias UFs) deixa estado em branco.
+  cidade          String?
+  estado          String?  @db.VarChar(2)
   // Relacionamento: 1 (sem relacionamento) a 5 (excelente). Default 1.
   relacionamento  Int      @default(1)
   // Pessoal: marca contatos pessoais (não profissionais). Continua no banco,

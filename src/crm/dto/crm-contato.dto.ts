@@ -22,6 +22,12 @@ export class CreateCrmContatoDto {
   @IsOptional() @IsString() @MaxLength(40) telefone?: string;
   @IsOptional() @IsString() @MaxLength(40) telefonePessoal?: string;
 
+  // Cidade e Estado (UF). Ao preencher a cidade, o estado é sugerido
+  // automaticamente; cidade ambígua (existe em várias UFs) deixa o estado
+  // em branco para ajuste manual.
+  @IsOptional() @IsString() @MaxLength(120) cidade?: string;
+  @IsOptional() @IsString() @MaxLength(2) estado?: string;
+
   // E-mail é opcional; aceita vazio (o usuário pode preencher depois).
   @IsOptional() @IsEmail() email?: string;
 
@@ -41,6 +47,8 @@ export class ImportarContatoItemDto {
   @IsOptional() @IsString() @MaxLength(160) empresa?: string;
   @IsOptional() @IsString() @MaxLength(40) telefone?: string;
   @IsOptional() @IsString() @MaxLength(40) telefonePessoal?: string;
+  @IsOptional() @IsString() @MaxLength(120) cidade?: string;
+  @IsOptional() @IsString() @MaxLength(2) estado?: string;
   @IsOptional() @IsString() @MaxLength(160) email?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5) relacionamento?: number;
 }
