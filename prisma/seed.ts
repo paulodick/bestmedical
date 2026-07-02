@@ -60,6 +60,35 @@ async function main() {
     }
   }
 
+  // Usuário Cassiano — admin. Login: 'cassiano'.
+  // Criado uma única vez com senha padrão 'admin'. Em execuções seguintes o
+  // upsert apenas garante que a conta exista e seja admin, sem sobrescrever a
+  // senha (para não desfazer uma troca de senha feita pelo próprio usuário).
+  const cassianoUsuario = 'cassiano';
+  const cassianoExistente = await prisma.usuario.findUnique({
+    where: { usuario: cassianoUsuario },
+  });
+  if (!cassianoExistente) {
+    const cassianoSenhaHash = await bcrypt.hash('admin', 10);
+    const cassiano = await prisma.usuario.create({
+      data: {
+        nome: 'Cassiano',
+        usuario: cassianoUsuario,
+        email: 'cassiano@bestmedical.com.br',
+        senhaHash: cassianoSenhaHash,
+        perfil: 'admin',
+      },
+    });
+    console.log(`Usuário Cassiano criado: ${cassiano.usuario} (senha: admin)`);
+  } else {
+    // Garante privilégio admin e conta ativa, preservando a senha atual.
+    await prisma.usuario.update({
+      where: { usuario: cassianoUsuario },
+      data: { perfil: 'admin', ativo: true },
+    });
+    console.log('Usuário Cassiano já existe; perfil admin garantido.');
+  }
+
   // Cliente de exemplo (opcional)
   const total = await prisma.cliente.count();
   if (total === 0) {
