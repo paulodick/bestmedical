@@ -61,13 +61,21 @@ const DDD_UF: Record<string, string> = {
 // parênteses, traços e o 0 de operadora. Retorna null se não parecer BR.
 export function extrairDDD(telefone?: string | null): string | null {
   if (!telefone) return null;
-  let d = (telefone || '').replace(/\D/g, '');
+  const bruto = (telefone || '').trim();
+  let d = bruto.replace(/\D/g, '');
   if (!d) return null;
+
+  // Número internacional explícito com prefixo + e código de país != 55
+  // (ex.: +1..., +34...) NÃO é brasileiro: não deve virar DDD/UF.
+  if (bruto.startsWith('+') && !d.startsWith('55')) return null;
+
   // Remove código do país 55, se presente com tamanho compatível.
   if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
   // Remove 0 de DDD interurbano/operadora (ex.: 011...).
   if (d.startsWith('0') && d.length >= 11) d = d.slice(1);
-  if (d.length < 10) return null; // curto demais p/ ter DDD+numero BR
+  // Depois de limpar, número BR válido tem 10 (fixo) ou 11 (celular) dígitos.
+  // Mais que isso normalmente é número estrangeiro sem + — não confiável.
+  if (d.length < 10 || d.length > 11) return null;
   const ddd = d.slice(0, 2);
   return DDD_UF[ddd] ? ddd : null;
 }
@@ -198,8 +206,11 @@ const TERMOS_EMPRESA = new Set<string>([
   'seguros', 'corretora', 'financeira', 'contabilidade', 'advocacia',
   'advogados', 'associados', 'ltda', 'eireli', 'mei', 'epp', 'cia',
   'adm', 'administracao', 'grupo', 'rede', 'sistema', 'santa', 'sao',
-  'santo', 'nossa', 'senhora', 'dr', 'dra',
+  'santo', 'nossa', 'senhora',
 ]);
+
+// Prefixos/títulos que pertencem à PESSOA (não à empresa).
+const TITULOS_PESSOA = new Set<string>(['dr', 'dra', 'sr', 'sra', 'prof', 'profa']);
 
 // ===================== Detecção de cidade/UF no texto =====================
 function detectarCidadeEstado(
@@ -320,12 +331,21 @@ export function separarContato(
   }
 
   // Índice onde começa o nome da pessoa: 1ª palavra que é primeiro nome
-  // conhecido E que não foi consumida pela cidade.
+  // conhecido E que não foi consumida pela cidade. Um título (Dr/Dra/Sr...)
+  // imediatamente antes do primeiro nome também entra no nome da pessoa.
   let idxNome = -1;
   for (let i = 0; i < palavrasNorm.length; i++) {
     if (indicesUsados.has(i)) continue;
     if (PRIMEIROS_NOMES.has(palavrasNorm[i])) {
       idxNome = i;
+      // Recua para incluir títulos (dr, dra...) que precedem o nome.
+      while (
+        idxNome - 1 >= 0 &&
+        !indicesUsados.has(idxNome - 1) &&
+        TITULOS_PESSOA.has(palavrasNorm[idxNome - 1])
+      ) {
+        idxNome--;
+      }
       break;
     }
   }
@@ -338,16 +358,14 @@ export function separarContato(
     empresaTokens = palavrasOrig.slice(0, idxNome);
     nomeTokens = palavrasOrig.slice(idxNome);
   } else {
-    // Fallback AGRESSIVO: sem primeiro nome conhecido.
+    // Sem primeiro nome conhecido. SÓ separa empresa/nome quando existe um
+    // termo claro de empresa no texto; caso contrário mantém tudo como nome
+    // (evita quebrar razões sociais como "Academia Octógono", "Ademir Elétrica").
     const restante = palavrasOrig.filter((_, i) => !indicesUsados.has(i));
-    if (restante.length >= 2) {
-      // 1ª palavra = empresa, resto = nome.
-      empresaTokens = [restante[0]];
-      nomeTokens = restante.slice(1);
-    } else {
-      // 1 palavra só: mantém como nome.
-      nomeTokens = restante;
-    }
+    // Entidade única (empresa OU pessoa sem primeiro nome mapeado): mantém o
+    // texto inteiro no campo nome e deixa empresa em branco. Não inventamos
+    // uma separação que pode estar errada.
+    nomeTokens = restante;
   }
 
   // Remove tokens de cidade da parte de empresa e de nome (já viraram cidade).
