@@ -93,10 +93,11 @@ export class OrcamentosController {
     return this.orcamentos.enviar(id);
   }
 
-  // Exclusão é uma ação destrutiva — restrita a administradores.
+  // Exclusão é uma ação destrutiva — restrita ao administrador master
+  // (usuário 'paulodick'). A checagem fina fica no service.
   @Roles('admin')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.orcamentos.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orcamentos.remove(id, user);
   }
 }

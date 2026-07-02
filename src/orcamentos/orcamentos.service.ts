@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  forwardRef,
+  Inject,
+} from '@nestjs/common';
+import type { AuthUser } from '../auth/current-user.decorator';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -441,7 +448,16 @@ export class OrcamentosService {
     return this.serialize(orc);
   }
 
-  async remove(id: string) {
+  // Exclui um orçamento (e, em cascata, itens, parcelas, OS e follow-ups).
+  // Permitido apenas ao administrador master (usuário 'paulodick').
+  async remove(id: string, user?: AuthUser) {
+    const ehAdminMaster =
+      (user?.usuario || '').trim().toLowerCase() === 'paulodick';
+    if (!ehAdminMaster) {
+      throw new ForbiddenException(
+        'Apenas o administrador master pode excluir orçamentos.',
+      );
+    }
     await this.ensure(id);
     await this.prisma.orcamento.delete({ where: { id } });
     return { ok: true };
