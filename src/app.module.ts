@@ -18,6 +18,7 @@ import { EmailModule } from './email/email.module';
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { WorkflowModule } from './workflow/workflow.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { RolesGuard } from './auth/roles.guard';
     CepModule,
     EmailModule,
     FinanceiroModule,
+    WorkflowModule,
   ],
   controllers: [HealthController],
   providers: [
