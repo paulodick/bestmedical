@@ -35,19 +35,29 @@ export class WorkflowService {
   public async execute(graph: WorkflowGraph, inputMessage: string, sessionId: string) {
     this.logger.log(`Iniciando execucao do fluxo para a sessao: ${sessionId}`);
 
-    // 1. Integracao Nativa Prisma: Localiza ou cria o cliente com base no telefone/sessao
-    let cliente = await this.prisma.cliente.findFirst({
+    // 1. Integracao Nativa Prisma: Localiza ou cria o cliente com base no telefone/sessao.
+    // 'telefone' vive em Contato (vinculado ao Cliente), nao em Cliente diretamente.
+    const contatoExistente = await this.prisma.contato.findFirst({
       where: { telefone: sessionId },
+      include: { cliente: true },
     });
+
+    let cliente = contatoExistente?.cliente;
 
     if (!cliente) {
       this.logger.log(`Cliente nao encontrado. Criando registro nativo no Postgres para: ${sessionId}`);
       cliente = await this.prisma.cliente.create({
         data: {
           nome: `Paciente Simulado ${sessionId.slice(-4)}`,
-          telefone: sessionId,
           numero: 'S/N',
           complemento: 'Iniciado via Automação IA',
+        },
+      });
+      await this.prisma.contato.create({
+        data: {
+          clienteId: cliente.id,
+          nome: `Paciente Simulado ${sessionId.slice(-4)}`,
+          telefone: sessionId,
         },
       });
     }
@@ -55,7 +65,7 @@ export class WorkflowService {
     const contextLogs: string[] = [];
     const variables: Record<string, any> = {
       patient_name: cliente.nome,
-      phone: cliente.telefone,
+      phone: sessionId,
       possui_convenio: true,
       last_sent_message: '',
     };
@@ -137,14 +147,17 @@ export class WorkflowService {
       }
     }
 
-    // 2. Criacao Automatica de Proposta (Conexao Nativa com a tabela proposta do Prisma)
+    // 2. Criacao Automatica de Proposta (Conexao Nativa com a tabela proposta do Prisma).
+    // Proposta nao tem um campo 'status' unico — o schema usa flags booleanas
+    // (statusEnviado, statusAprovado, ...) que ja comecam em false por padrao.
+    // 'data' e 'tipoContrato' sao obrigatorios e nao tem valor default.
     if (variables['last_sent_message'] && variables['last_sent_message'].includes('orçamento')) {
       const novaProposta = await this.prisma.proposta.create({
         data: {
-          numero: `ORC-IA-${Date.now()}`,
+          numero: `PC-IA-${Date.now()}`,
+          data: new Date(),
           clienteId: cliente.id,
-          status: 'NOVA_DEMANDA',
-          total: 0.0,
+          tipoContrato: 'Suporte Remoto',
         },
       });
       contextLogs.push(`[CRM] Proposta nativa ${novaProposta.numero} criada no Postgres com sucesso.`);
