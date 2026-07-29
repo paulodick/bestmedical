@@ -12,6 +12,7 @@ import type { Response } from 'express';
 import { ContratoService } from './contrato.service';
 import { UpdateContratoDto } from './dto/contrato.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { EnviarComSolicitantesDto } from '../common/email/resolver-destinatarios';
 import { Roles } from '../auth/roles.decorator';
 
 // O JwtAuthGuard já é global; manter aqui é redundante mas inofensivo e explícito.
@@ -58,7 +59,10 @@ export class ContratoController {
 
   @Roles('admin', 'operador')
   @Post(':id/enviar')
-  enviar(@Param('id') id: string) {
-    return this.contrato.enviar(id);
+  enviar(
+    @Param('id') id: string,
+    @Body() dto?: EnviarComSolicitantesDto,
+  ) {
+    return this.contrato.enviar(id, dto);
   }
 }

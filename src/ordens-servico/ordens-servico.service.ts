@@ -11,6 +11,7 @@ const CC_FIXO_OS = 'paulo@bestmedical.com.br';
 const OS_INCLUDE = {
   itens: { orderBy: { ordem: 'asc' as const } },
   fotos: { orderBy: { ordem: 'asc' as const } },
+  atendimentos: { orderBy: { ordem: 'asc' as const } },
 } as const;
 
 @Injectable()
@@ -180,6 +181,22 @@ export class OrdensServicoService {
         }
       }
 
+      // Substitui os atendimentos (data + técnico + descrição) se fornecidos
+      if (dto.atendimentos !== undefined) {
+        await tx.atendimentoOS.deleteMany({ where: { ordemId: id } });
+        if (dto.atendimentos.length > 0) {
+          await tx.atendimentoOS.createMany({
+            data: dto.atendimentos.map((a, i) => ({
+              ordemId: id,
+              ordem: i,
+              data: a.data ? new Date(a.data) : new Date(),
+              tecnico: a.tecnico ?? '',
+              descricao: a.descricao ?? '',
+            })),
+          });
+        }
+      }
+
       // Atualiza campos da OS
       return tx.ordemServico.update({
         where: { id },
@@ -336,6 +353,13 @@ export class OrdensServicoService {
         dataUrl: f.dataUrl,
         legenda: f.legenda,
         ordem: f.ordem,
+      })),
+      // Atendimentos (data + técnico + descrição)
+      atendimentos: (os.atendimentos || []).map((a: any) => ({
+        id: a.id,
+        data: isoDate(a.data),
+        tecnico: a.tecnico ?? '',
+        descricao: a.descricao ?? '',
       })),
     };
   }

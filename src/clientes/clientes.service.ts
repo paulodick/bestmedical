@@ -72,6 +72,7 @@ export class ClientesService {
       return {
         encontrado: true,
         fonte: 'cadastro',
+        clienteId: cliente.id,
         cnpj: cliente.cnpj ?? '',
         empresa: cliente.nome ?? '',
         cep: cliente.cep ?? '',

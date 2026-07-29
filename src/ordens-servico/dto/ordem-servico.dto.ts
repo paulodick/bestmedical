@@ -25,6 +25,13 @@ export class FotoOsDto {
   @IsOptional() @IsString() legenda?: string;
 }
 
+// DTO de um conjunto de atendimento (data + técnico + descrição).
+export class AtendimentoOsDto {
+  @IsOptional() @IsString() data?: string; // ISO yyyy-mm-dd
+  @IsOptional() @IsString() tecnico?: string;
+  @IsOptional() @IsString() descricao?: string;
+}
+
 // DTO principal de atualização da OS.
 // Campos read-only (numero, data, snapshots) não são atualizados via este DTO.
 export class UpdateOrdemServicoDto {
@@ -46,6 +53,14 @@ export class UpdateOrdemServicoDto {
   @ValidateNested({ each: true })
   @Type(() => FotoOsDto)
   fotos?: FotoOsDto[];
+
+  // Lista completa de atendimentos (data + técnico + descrição) — substitui
+  // os existentes. Sem limite de quantidade.
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AtendimentoOsDto)
+  atendimentos?: AtendimentoOsDto[];
 }
 
 // DTO para envio da OS por e-mail.

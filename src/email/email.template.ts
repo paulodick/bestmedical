@@ -1,3 +1,4 @@
+import { saudacaoEmail } from '../common/email/saudacao';
 // Template HTML do e-mail de envio do orçamento (simples e sóbrio).
 
 const brl = (v: number) =>
@@ -7,7 +8,10 @@ const brl = (v: number) =>
     minimumFractionDigits: 2,
   });
 
-export function montarEmailOrcamento(o: any): { assunto: string; html: string } {
+export function montarEmailOrcamento(
+  o: any,
+  opts: { semPrincipal?: boolean; nomePrincipal?: string | null } = {},
+): { assunto: string; html: string } {
   const assunto = `Orçamento ${o.numero} — Best Medical`;
   const empresa = o.empresa || 'cliente';
   const total = brl(o.total);
@@ -20,7 +24,7 @@ export function montarEmailOrcamento(o: any): { assunto: string; html: string } 
     </div>
 
     <p style="font-size:14px; line-height:1.6;">
-      Olá${o.solicitante ? `, ${o.solicitante}` : ''},
+      ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? o.solicitante, empresa: o.empresa })}
     </p>
     <p style="font-size:14px; line-height:1.6;">
       Segue em anexo o orçamento <strong>${o.numero}</strong> referente à

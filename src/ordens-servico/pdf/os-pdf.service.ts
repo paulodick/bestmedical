@@ -290,8 +290,53 @@ export class OsPdfService {
       margin: [0, 0, 0, 12],
     });
 
-    // ===== Descrição do serviço =====
-    if (os.descricaoServico) {
+    // ===== Descrição do serviço (atendimentos: data + técnico + descrição) =====
+    const atendimentos = (os.atendimentos || []).filter(
+      (a: any) => a.descricao || a.tecnico,
+    );
+    if (atendimentos.length > 0) {
+      content.push({
+        text: 'DESCRIÇÃO DO SERVIÇO',
+        fontSize: 8,
+        bold: true,
+        color: SLATE400,
+        characterSpacing: 0.5,
+        margin: [0, 0, 0, 4],
+      });
+      atendimentos.forEach((a: any, i: number) => {
+        const cabecalho = [dataBR(a.data), a.tecnico].filter(Boolean).join(' — ');
+        content.push({
+          table: {
+            widths: ['*'],
+            body: [
+              [
+                {
+                  stack: [
+                    ...(cabecalho
+                      ? [
+                          {
+                            text: cabecalho,
+                            fontSize: 9,
+                            bold: true,
+                            color: SLATE700,
+                            margin: [0, 0, 0, 3],
+                          },
+                        ]
+                      : []),
+                    { text: a.descricao || '', fontSize: 10, color: SLATE700 },
+                  ],
+                  fillColor: '#f8fafc',
+                  margin: [8, 6, 8, 6],
+                },
+              ],
+            ],
+          },
+          layout: 'noBorders',
+          margin: [0, 0, 0, i === atendimentos.length - 1 ? 12 : 6],
+        });
+      });
+    } else if (os.descricaoServico) {
+      // Compatibilidade: OS antiga sem atendimentos migrados ainda.
       content.push({
         table: {
           widths: ['*'],
