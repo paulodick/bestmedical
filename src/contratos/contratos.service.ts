@@ -18,8 +18,12 @@ import { montarEmailProposta } from './proposta-email.template';
 import { gerarObservacoesComCustomizacoes } from './contrato-customizacoes';
 import { CONDICOES_PADRAO } from './condicoes-padrao';
 import { ContratoService } from './contrato.service';
+import {
+  resolverDestinatarios,
+  EnviarComSolicitantesDto,
+} from '../common/email/resolver-destinatarios';
 
-// CC fixo de controle para o envio da proposta (além do MAIL_CC do servidor)
+// CC fixo (agora BCC) de confirmação interna para o envio da proposta
 const CC_FIXO_PROPOSTA = 'paulo@bestmedical.com.br';
 
 const TEXTO_FINAL_PADRAO =
@@ -430,17 +434,30 @@ export class ContratosService {
     return { ok: true };
   }
 
-  // ===== Enviar por e-mail (gera PDF, envia ao solicitante com cópia) =====
-  async enviar(id: string) {
+  // ===== Enviar por e-mail (gera PDF, envia ao(s) solicitante(s) selecionados) =====
+  // Mesma regra do orçamento: principal = To, demais selecionados = CC,
+  // sem seleção cai no comportamento antigo (e-mail do solicitante da
+  // proposta). BCC de confirmação sempre para paulo@bestmedical.com.br.
+  async enviar(id: string, dto?: EnviarComSolicitantesDto) {
     await this.ensure(id);
     const dados = await this.get(id); // serializado (formato do front)
 
-    const destinatario = (dados.email || '').trim();
-    if (!destinatario) {
+    const resolvido = await resolverDestinatarios(
+      this.prisma,
+      dto?.contatoIds,
+      dto?.principalContatoId,
+    );
+
+    const usouSelecao = resolvido.paraVarios.length > 0;
+    const destinatarios = usouSelecao
+      ? resolvido.paraVarios
+      : [(dados.email || '').trim()].filter(Boolean);
+
+    if (destinatarios.length === 0) {
       return {
         ok: false,
         mensagem:
-          'A proposta não tem e-mail do solicitante. Preencha o campo E-mail para enviar.',
+          'Selecione ao menos um solicitante com e-mail cadastrado (ou preencha o campo E-mail) para enviar.',
       };
     }
 
@@ -453,14 +470,19 @@ export class ContratosService {
     }
 
     const pdf = await this.pdf.gerar(dados);
-    const { assunto, html } = montarEmailProposta(dados);
+    const { assunto, html } = montarEmailProposta(dados, {
+      semPrincipal: usouSelecao && !resolvido.temPrincipal,
+      nomePrincipal: resolvido.nomePrincipal,
+    });
 
     try {
       await this.email.enviar({
-        para: destinatario,
+        para: destinatarios[0],
+        paraVarios: destinatarios,
         assunto,
         html,
-        ccExtra: [CC_FIXO_PROPOSTA],
+        ccExtra: resolvido.ccEmails,
+        bcc: [CC_FIXO_PROPOSTA],
         anexoPdf: { nome: `${dados.numero || 'proposta'}.pdf`, conteudo: pdf },
       });
     } catch (e) {
@@ -478,9 +500,13 @@ export class ContratosService {
       include: PROP_INCLUDE,
     });
 
+    const resumoCc = resolvido.ccEmails.length
+      ? ` (cc: ${resolvido.ccEmails.join(', ')})`
+      : '';
+
     return {
       ok: true,
-      mensagem: `Proposta enviada para ${destinatario} (cópia para controle).`,
+      mensagem: `Proposta enviada para ${destinatarios.join(', ')}${resumoCc}.`,
       proposta: this.serialize(prop),
     };
   }
@@ -546,6 +572,9 @@ export class ContratosService {
       id: p.id,
       numero: p.numero,
       data: isoDate(p.data),
+      // id do cliente vinculado — usado no front para listar os solicitantes
+      // (contatos) já cadastrados no dropdown/modal de envio.
+      clienteId: p.clienteId ?? null,
       // empresa / endereço (snapshot tem prioridade; cai para o cadastro)
       cnpj: p.clienteCnpjSnap ?? p.cliente?.cnpj ?? '',
       empresa: p.clienteNomeSnap ?? p.cliente?.nome ?? '',

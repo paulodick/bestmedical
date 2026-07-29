@@ -247,10 +247,28 @@ model OrdemServico {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  itens     ItemOS[]
-  fotos     FotoOS[]
+  itens        ItemOS[]
+  fotos        FotoOS[]
+  atendimentos AtendimentoOS[]
 
   @@map("ordens_servico")
+}
+
+// Conjunto de atendimento da OS: data + técnico + descrição. Substitui o
+// antigo campo único "descricaoServico" (mantido na tabela por segurança/
+// histórico, mas não é mais editado pela tela). Quantidade ilimitada.
+model AtendimentoOS {
+  id        String   @id @default(uuid())
+  ordemId   String   @map("ordem_id")
+  ordem     Int      @default(0)
+  data      DateTime @db.Date
+  tecnico   String   @default("")
+  descricao String   @default("") @db.Text
+
+  os OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+
+  @@index([ordemId])
+  @@map("atendimentos_os")
 }
 
 model ItemOS {

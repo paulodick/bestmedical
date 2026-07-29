@@ -11,8 +11,12 @@ import {
   numeroContratoDeProposta,
 } from './contrato-template';
 import { UpdateContratoDto } from './dto/contrato.dto';
+import {
+  resolverDestinatarios,
+  EnviarComSolicitantesDto,
+} from '../common/email/resolver-destinatarios';
 
-// CC fixo de controle para o envio do contrato (além do MAIL_CC do servidor).
+// CC fixo (agora BCC) de confirmação interna para o envio do contrato.
 const CC_FIXO_CONTRATO = 'paulo@bestmedical.com.br';
 
 // include padrão da proposta de origem (equipamentos ordenados + cliente/contato).
@@ -85,19 +89,26 @@ export class ContratoService {
         conteudoPadraoSnap: corpo,
         conteudoCustomizado: corpo,
       },
+      include: { proposta: { select: { clienteId: true } } },
     });
 
     return this.serialize(contrato);
   }
 
   async get(id: string) {
-    const c = await this.prisma.contrato.findUnique({ where: { id } });
+    const c = await this.prisma.contrato.findUnique({
+      where: { id },
+      include: { proposta: { select: { clienteId: true } } },
+    });
     if (!c) throw new NotFoundException('Contrato não encontrado');
     return this.serialize(c);
   }
 
   async getPorProposta(propostaId: string) {
-    const c = await this.prisma.contrato.findUnique({ where: { propostaId } });
+    const c = await this.prisma.contrato.findUnique({
+      where: { propostaId },
+      include: { proposta: { select: { clienteId: true } } },
+    });
     if (!c) throw new NotFoundException('Contrato não encontrado');
     return this.serialize(c);
   }
@@ -135,14 +146,18 @@ export class ContratoService {
           conteudoCustomizado: corpo,
           ...(dto.data ? { data: new Date(dto.data) } : {}),
         },
+        include: { proposta: { select: { clienteId: true } } },
       });
     });
 
     return this.serialize(contrato);
   }
 
-  // ===== Enviar por e-mail (gera PDF, envia ao solicitante da proposta) =====
-  async enviar(id: string) {
+  // ===== Enviar por e-mail (gera PDF, envia ao(s) solicitante(s) selecionados) =====
+  // Mesma regra do orçamento/proposta: principal = To, demais selecionados =
+  // CC, sem seleção cai no comportamento antigo (e-mail do solicitante da
+  // proposta de origem). BCC de confirmação sempre para paulo@bestmedical.com.br.
+  async enviar(id: string, dto?: EnviarComSolicitantesDto) {
     const contrato = await this.prisma.contrato.findUnique({
       where: { id },
       include: { proposta: { include: PROP_INCLUDE } },
@@ -150,12 +165,23 @@ export class ContratoService {
     if (!contrato) throw new NotFoundException('Contrato não encontrado');
 
     const prop = contrato.proposta;
-    const destinatario = (prop.emailSnap ?? prop.contato?.email ?? '').trim();
-    if (!destinatario) {
+
+    const resolvido = await resolverDestinatarios(
+      this.prisma,
+      dto?.contatoIds,
+      dto?.principalContatoId,
+    );
+
+    const usouSelecao = resolvido.paraVarios.length > 0;
+    const destinatarios = usouSelecao
+      ? resolvido.paraVarios
+      : [(prop.emailSnap ?? prop.contato?.email ?? '').trim()].filter(Boolean);
+
+    if (destinatarios.length === 0) {
       return {
         ok: false,
         mensagem:
-          'A proposta de origem não tem e-mail do solicitante. Preencha o campo E-mail para enviar.',
+          'Selecione ao menos um solicitante com e-mail cadastrado (ou preencha o e-mail na proposta de origem) para enviar.',
       };
     }
 
@@ -169,14 +195,19 @@ export class ContratoService {
 
     const dadosPdf = this.dadosParaPdf(contrato);
     const pdf = await this.pdf.gerar(dadosPdf);
-    const { assunto, html } = montarEmailContrato(dadosPdf);
+    const { assunto, html } = montarEmailContrato(dadosPdf, {
+      semPrincipal: usouSelecao && !resolvido.temPrincipal,
+      nomePrincipal: resolvido.nomePrincipal,
+    });
 
     try {
       await this.email.enviar({
-        para: destinatario,
+        para: destinatarios[0],
+        paraVarios: destinatarios,
         assunto,
         html,
-        ccExtra: [CC_FIXO_CONTRATO],
+        ccExtra: resolvido.ccEmails,
+        bcc: [CC_FIXO_CONTRATO],
         anexoPdf: {
           nome: `${contrato.numero || 'contrato'}.pdf`,
           conteudo: pdf,
@@ -196,9 +227,13 @@ export class ContratoService {
       data: { statusEnviado: true, enviadoEm: new Date() },
     });
 
+    const resumoCc = resolvido.ccEmails.length
+      ? ` (cc: ${resolvido.ccEmails.join(', ')})`
+      : '';
+
     return {
       ok: true,
-      mensagem: `Contrato enviado para ${destinatario} (cópia para controle).`,
+      mensagem: `Contrato enviado para ${destinatarios.join(', ')}${resumoCc}.`,
       contrato: this.serialize(atualizado),
     };
   }
@@ -241,6 +276,9 @@ export class ContratoService {
       id: c.id,
       numero: c.numero,
       propostaId: c.propostaId,
+      // id do cliente da proposta de origem — usado no front para listar os
+      // solicitantes cadastrados no modal de envio do contrato.
+      clienteId: c.proposta?.clienteId ?? null,
       data: isoDate(c.data),
       conteudoPadraoSnap: c.conteudoPadraoSnap ?? '',
       conteudoCustomizado: c.conteudoCustomizado ?? '',

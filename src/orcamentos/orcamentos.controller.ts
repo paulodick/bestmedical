@@ -20,6 +20,7 @@ import {
   UpdateStatusDto,
 } from './dto/listar-orcamentos.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { EnviarComSolicitantesDto } from '../common/email/resolver-destinatarios';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 
@@ -89,8 +90,11 @@ export class OrcamentosController {
 
   @Roles('admin', 'operador')
   @Post(':id/enviar')
-  enviar(@Param('id') id: string) {
-    return this.orcamentos.enviar(id);
+  enviar(
+    @Param('id') id: string,
+    @Body() dto?: EnviarComSolicitantesDto,
+  ) {
+    return this.orcamentos.enviar(id, dto);
   }
 
   // Exclusão é uma ação destrutiva — restrita ao administrador master

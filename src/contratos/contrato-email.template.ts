@@ -1,6 +1,10 @@
+import { saudacaoEmail } from '../common/email/saudacao';
 // Template HTML do e-mail de envio do contrato (simples e sóbrio).
 
-export function montarEmailContrato(d: any): { assunto: string; html: string } {
+export function montarEmailContrato(
+  d: any,
+  opts: { semPrincipal?: boolean; nomePrincipal?: string | null } = {},
+): { assunto: string; html: string } {
   const assunto = `Contrato ${d.numero} — Best Medical`;
   const empresa = d.empresa || 'cliente';
 
@@ -12,7 +16,7 @@ export function montarEmailContrato(d: any): { assunto: string; html: string } {
     </div>
 
     <p style="font-size:14px; line-height:1.6;">
-      Olá${d.solicitante ? `, ${d.solicitante}` : ''},
+      ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? d.solicitante, empresa: d.empresa })}
     </p>
     <p style="font-size:14px; line-height:1.6;">
       Segue em anexo o contrato <strong>${d.numero}</strong> referente à ${empresa},

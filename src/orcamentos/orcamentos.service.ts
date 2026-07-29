@@ -28,6 +28,13 @@ import { PdfService } from './pdf/pdf.service';
 import { EmailService } from '../email/email.service';
 import { montarEmailOrcamento } from '../email/email.template';
 import { OrdensServicoService } from '../ordens-servico/ordens-servico.service';
+import {
+  resolverDestinatarios,
+  EnviarComSolicitantesDto,
+} from '../common/email/resolver-destinatarios';
+
+// CC fixo (agora BCC) para confirmação interna do envio
+const CC_FIXO_ORCAMENTO = 'paulo@bestmedical.com.br';
 
 const TEXTO_FINAL_PADRAO =
   'Orçamento válido por 15 dias. Qualquer alteração no escopo do serviço poderá alterar os itens e/ou valores listados nesta proposta.';
@@ -471,17 +478,31 @@ export class OrcamentosService {
     return { ok: true };
   }
 
-  // ===== Enviar por e-mail (gera PDF, envia ao solicitante com cópia) =====
-  async enviar(id: string) {
+  // ===== Enviar por e-mail (gera PDF, envia ao(s) solicitante(s) selecionados) =====
+  // dto: solicitantes selecionados no modal + qual é o principal (To), os
+  // demais vão em cópia (CC). Sem dto/seleção, cai no comportamento antigo
+  // (usa o e-mail do solicitante do orçamento). Uma cópia oculta (BCC) do
+  // envio sempre vai para paulo@bestmedical.com.br.
+  async enviar(id: string, dto?: EnviarComSolicitantesDto) {
     await this.ensure(id);
     const dados = await this.get(id); // serializado (formato do front)
 
-    const destinatario = (dados.email || '').trim();
-    if (!destinatario) {
+    const resolvido = await resolverDestinatarios(
+      this.prisma,
+      dto?.contatoIds,
+      dto?.principalContatoId,
+    );
+
+    const usouSelecao = resolvido.paraVarios.length > 0;
+    const destinatarios = usouSelecao
+      ? resolvido.paraVarios
+      : [(dados.email || '').trim()].filter(Boolean);
+
+    if (destinatarios.length === 0) {
       return {
         ok: false,
         mensagem:
-          'O orçamento não tem e-mail do solicitante. Preencha o campo E-mail para enviar.',
+          'Selecione ao menos um solicitante com e-mail cadastrado (ou preencha o campo E-mail) para enviar.',
       };
     }
 
@@ -495,13 +516,20 @@ export class OrcamentosService {
 
     // Gera o PDF e monta o e-mail
     const pdf = await this.pdf.gerar(dados);
-    const { assunto, html } = montarEmailOrcamento(dados);
+    const { assunto, html } = montarEmailOrcamento(dados, {
+      semPrincipal: usouSelecao && !resolvido.temPrincipal,
+      nomePrincipal: resolvido.nomePrincipal,
+    });
 
     try {
       await this.email.enviar({
-        para: destinatario,
+        para: destinatarios[0],
+        paraVarios: destinatarios,
         assunto,
         html,
+        ccExtra: resolvido.ccEmails,
+        // Confirmação interna sempre em cópia oculta (CCO)
+        bcc: [CC_FIXO_ORCAMENTO],
         anexoPdf: { nome: `${dados.numero || 'orcamento'}.pdf`, conteudo: pdf },
       });
     } catch (e) {
@@ -520,9 +548,13 @@ export class OrcamentosService {
       include: ORC_INCLUDE,
     });
 
+    const resumoCc = resolvido.ccEmails.length
+      ? ` (cc: ${resolvido.ccEmails.join(', ')})`
+      : '';
+
     return {
       ok: true,
-      mensagem: `Orçamento enviado para ${destinatario} (cópia para controle).`,
+      mensagem: `Orçamento enviado para ${destinatarios.join(', ')}${resumoCc}.`,
       orcamento: this.serialize(orc),
     };
   }
@@ -541,6 +573,9 @@ export class OrcamentosService {
       id: o.id,
       numero: o.numero,
       data: isoDate(o.data),
+      // id do cliente vinculado — usado no front para listar os solicitantes
+      // (contatos) já cadastrados no dropdown/modal de envio.
+      clienteId: o.clienteId ?? null,
       // empresa / endereço (snapshot tem prioridade; cai para o cadastro)
       cnpj: o.clienteCnpjSnap ?? o.cliente?.cnpj ?? '',
       empresa: o.clienteNomeSnap ?? o.cliente?.nome ?? '',

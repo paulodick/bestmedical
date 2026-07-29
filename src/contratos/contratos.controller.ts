@@ -21,6 +21,7 @@ import {
   UploadContratoAssinadoDto,
 } from './dto/listar-propostas.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { EnviarComSolicitantesDto } from '../common/email/resolver-destinatarios';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
 
@@ -90,8 +91,11 @@ export class ContratosController {
 
   @Roles('admin', 'operador')
   @Post(':id/enviar')
-  enviar(@Param('id') id: string) {
-    return this.contratos.enviar(id);
+  enviar(
+    @Param('id') id: string,
+    @Body() dto?: EnviarComSolicitantesDto,
+  ) {
+    return this.contratos.enviar(id, dto);
   }
 
   // Upload do contrato assinado (PDF base64). Ao carregar, a proposta passa

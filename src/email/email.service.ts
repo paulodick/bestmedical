@@ -10,6 +10,8 @@ export interface EnvioEmail {
   paraVarios?: string[];
   // CCs extras além do MAIL_CC do servidor (por ex. paulo@bestmedical.com.br)
   ccExtra?: string[];
+  // BCC (cópia oculta) — ex.: confirmação interna para Paulo@bestmedical.com.br
+  bcc?: string[];
 }
 
 @Injectable()
@@ -64,6 +66,11 @@ export class EmailService {
     return [...new Set(lista.filter(Boolean))];
   }
 
+  // Monta a lista de BCCs, deduplicada, sem strings vazias
+  private montarBccs(bcc?: string[]): string[] {
+    return [...new Set((bcc || []).filter(Boolean))];
+  }
+
   async enviar(msg: EnvioEmail): Promise<{ ok: boolean; id?: string }> {
     if (!this.configurado) {
       throw new Error(
@@ -99,6 +106,12 @@ export class EmailService {
     const ccs = this.montarCcs(msg.ccExtra);
     if (ccs.length > 0) {
       payload.cc = ccs.map((e) => ({ email: e }));
+    }
+
+    // BCC (cópia oculta)
+    const bccs = this.montarBccs(msg.bcc);
+    if (bccs.length > 0) {
+      payload.bcc = bccs.map((e) => ({ email: e }));
     }
 
     if (msg.anexoPdf) {
@@ -177,10 +190,15 @@ export class EmailService {
     const ccs = this.montarCcs(msg.ccExtra);
     const cc = ccs.length > 0 ? ccs.join(', ') : undefined;
 
+    // BCC (cópia oculta)
+    const bccs = this.montarBccs(msg.bcc);
+    const bcc = bccs.length > 0 ? bccs.join(', ') : undefined;
+
     const info = await transporter.sendMail({
       from: this.remetenteSmtp,
       to,
       cc,
+      bcc,
       subject: msg.assunto,
       html: msg.html,
       attachments: msg.anexoPdf
