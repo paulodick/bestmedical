@@ -474,6 +474,7 @@ export class ContratosService {
       semPrincipal: usouSelecao && !resolvido.temPrincipal,
       nomePrincipal: resolvido.nomePrincipal,
       referenteA: dto?.referenteA,
+      destinatario: dto?.destinatario,
     });
 
     try {

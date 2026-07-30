@@ -71,7 +71,12 @@ export async function resolverDestinatarios(
 export class EnviarComSolicitantesDto {
   @IsOptional() @IsArray() @IsString({ each: true }) contatoIds?: string[];
   @IsOptional() @IsString() principalContatoId?: string | null;
-  // Texto livre exibido no corpo do e-mail ("referente à ..."). Preenchido
-  // no modal de envio (padrão: primeiro item de Itens e Serviços), editável.
+  // Linha de saudação do e-mail, usada como está (ex.: "À Clínica X" ou
+  // "Ao Hospital Y" — artigo escolhido no modal, pois depende do gênero
+  // gramatical do nome do cliente). Padrão no front: "À <Razão Social>".
+  @IsOptional() @IsString() destinatario?: string;
+  // Texto livre exibido no corpo do e-mail após "... referente ...". Já
+  // inclui o artigo ("à"/"ao") escolhido pelo usuário no modal de envio
+  // (padrão: "à " + primeiro item de Itens e Serviços), editável.
   @IsOptional() @IsString() referenteA?: string;
 }
