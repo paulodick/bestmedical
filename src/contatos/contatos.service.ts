@@ -16,6 +16,31 @@ export class ContatosService {
 
   async create(clienteId: string, dto: CreateContatoDto) {
     await this.ensureCliente(clienteId);
+
+    // Evita duplicar o mesmo solicitante para o cliente (ex.: clique duplo
+    // em "Salvar solicitante"). Se já existir um contato com o mesmo nome
+    // (comparação sem acento/case) para este cliente, atualiza os dados em
+    // vez de criar um novo registro.
+    const nomeNovo = (dto.nome || '').trim();
+    const existentes = await this.prisma.contato.findMany({
+      where: { clienteId },
+    });
+    const normaliza = (v: string) =>
+      v
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    const duplicado = existentes.find(
+      (c) => normaliza(c.nome) === normaliza(nomeNovo),
+    );
+    if (duplicado) {
+      return this.prisma.contato.update({
+        where: { id: duplicado.id },
+        data: { ...dto },
+      });
+    }
+
     return this.prisma.contato.create({ data: { ...dto, clienteId } });
   }
 

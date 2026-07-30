@@ -473,6 +473,7 @@ export class ContratosService {
     const { assunto, html } = montarEmailProposta(dados, {
       semPrincipal: usouSelecao && !resolvido.temPrincipal,
       nomePrincipal: resolvido.nomePrincipal,
+      referenteA: dto?.referenteA,
     });
 
     try {

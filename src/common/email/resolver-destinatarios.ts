@@ -71,4 +71,7 @@ export async function resolverDestinatarios(
 export class EnviarComSolicitantesDto {
   @IsOptional() @IsArray() @IsString({ each: true }) contatoIds?: string[];
   @IsOptional() @IsString() principalContatoId?: string | null;
+  // Texto livre exibido no corpo do e-mail ("referente à ..."). Preenchido
+  // no modal de envio (padrão: primeiro item de Itens e Serviços), editável.
+  @IsOptional() @IsString() referenteA?: string;
 }

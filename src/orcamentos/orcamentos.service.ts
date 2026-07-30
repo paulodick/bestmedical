@@ -519,6 +519,7 @@ export class OrcamentosService {
     const { assunto, html } = montarEmailOrcamento(dados, {
       semPrincipal: usouSelecao && !resolvido.temPrincipal,
       nomePrincipal: resolvido.nomePrincipal,
+      referenteA: dto?.referenteA,
     });
 
     try {
