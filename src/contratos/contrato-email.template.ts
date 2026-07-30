@@ -3,7 +3,12 @@ import { saudacaoEmail } from '../common/email/saudacao';
 
 export function montarEmailContrato(
   d: any,
-  opts: { semPrincipal?: boolean; nomePrincipal?: string | null; referenteA?: string } = {},
+  opts: {
+    semPrincipal?: boolean;
+    nomePrincipal?: string | null;
+    referenteA?: string;
+    destinatario?: string;
+  } = {},
 ): { assunto: string; html: string } {
   const assunto = `Contrato ${d.numero} — Best Medical`;
   const empresa = d.empresa || 'cliente';
@@ -17,10 +22,10 @@ export function montarEmailContrato(
     </div>
 
     <p style="font-size:14px; line-height:1.6;">
-      ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? d.solicitante, empresa: d.empresa })}
+      ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? d.solicitante, empresa: d.empresa, destinatario: opts.destinatario })}
     </p>
     <p style="font-size:14px; line-height:1.6;">
-      Segue em anexo o contrato <strong>${d.numero}</strong>${referenteA ? ` referente à ${referenteA}` : ''},
+      Segue em anexo o contrato <strong>${d.numero}</strong>${referenteA ? ` referente ${referenteA}` : ''},
       elaborado a partir da proposta ${d.numeroProposta || ''}. O documento em PDF
       contém as cláusulas e condições acordadas.
     </p>

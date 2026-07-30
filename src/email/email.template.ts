@@ -10,7 +10,12 @@ const brl = (v: number) =>
 
 export function montarEmailOrcamento(
   o: any,
-  opts: { semPrincipal?: boolean; nomePrincipal?: string | null; referenteA?: string } = {},
+  opts: {
+    semPrincipal?: boolean;
+    nomePrincipal?: string | null;
+    referenteA?: string;
+    destinatario?: string;
+  } = {},
 ): { assunto: string; html: string } {
   const assunto = `Orçamento ${o.numero} — Best Medical`;
   const empresa = o.empresa || 'cliente';
@@ -25,10 +30,10 @@ export function montarEmailOrcamento(
     </div>
 
     <p style="font-size:14px; line-height:1.6;">
-      ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? o.solicitante, empresa: o.empresa })}
+      ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? o.solicitante, empresa: o.empresa, destinatario: opts.destinatario })}
     </p>
     <p style="font-size:14px; line-height:1.6;">
-      Segue em anexo o orçamento <strong>${o.numero}</strong>${referenteA ? ` referente à ${referenteA}` : ''}.
+      Segue em anexo o orçamento <strong>${o.numero}</strong>${referenteA ? ` referente ${referenteA}` : ''}.
       O documento em PDF contém todos os detalhes do serviço e os valores.
     </p>
 
