@@ -31,11 +31,8 @@ export class OrdensServicoService {
       where: { orcamentoId },
       include: OS_INCLUDE,
     });
-    if (existente) {
-      return this.serialize(existente);
-    }
 
-    // Busca o orçamento com itens para copiar o snapshot
+    // Busca o orçamento com itens para copiar/atualizar o snapshot
     const orc = await this.prisma.orcamento.findUnique({
       where: { id: orcamentoId },
       include: {
@@ -45,6 +42,43 @@ export class OrdensServicoService {
       },
     });
     if (!orc) throw new NotFoundException('Orçamento não encontrado');
+
+    if (existente) {
+      // A OS já existe (idempotente), mas o snapshot de cliente/endereço/
+      // solicitante/equipamento deve refletir a versão mais atual do
+      // orçamento — o usuário pode editar o orçamento (ex.: preencher
+      // modelo/número de série) depois que a OS já foi criada, e essa
+      // correção precisa aparecer na OS. Não mexe em itens/fotos/
+      // atendimentos/assinaturas/observações: isso é conteúdo próprio da OS,
+      // preenchido pelo técnico.
+      const atualizada = await this.prisma.ordemServico.update({
+        where: { orcamentoId },
+        data: {
+          clienteNomeSnap: orc.clienteNomeSnap ?? orc.cliente?.nome,
+          clienteCnpjSnap: orc.clienteCnpjSnap ?? orc.cliente?.cnpj,
+          cep: orc.cliente?.cep,
+          endereco: orc.cliente?.endereco,
+          enderecoNumero: orc.cliente?.numero,
+          complemento: orc.cliente?.complemento,
+          bairro: orc.cliente?.bairro,
+          cidade: orc.cliente?.cidade,
+          estado: orc.cliente?.estado,
+          pais: orc.cliente?.pais ?? 'Brasil',
+          solicitanteSnap: orc.solicitanteSnap ?? orc.contato?.nome,
+          setorSnap: orc.setorSnap ?? orc.contato?.setor,
+          telefoneSnap: orc.telefoneSnap ?? orc.contato?.telefone,
+          emailSnap: orc.emailSnap ?? orc.contato?.email,
+          modalidade: orc.modalidade,
+          marca: orc.marca,
+          marcaOutras: orc.marcaOutras,
+          modelo: orc.modelo,
+          numeroSerie: orc.numeroSerie,
+          descricaoVisita: orc.descricaoVisita,
+        },
+        include: OS_INCLUDE,
+      });
+      return this.serialize(atualizada);
+    }
 
     // Deriva o número da OS: ORC-2026-0001 → OS-2026-0001
     // Suporte case-insensitive e fallback se não iniciar com ORC
