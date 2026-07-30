@@ -10,10 +10,11 @@ const brl = (v: number) =>
 
 export function montarEmailProposta(
   p: any,
-  opts: { semPrincipal?: boolean; nomePrincipal?: string | null } = {},
+  opts: { semPrincipal?: boolean; nomePrincipal?: string | null; referenteA?: string } = {},
 ): { assunto: string; html: string } {
   const assunto = `Proposta de Contrato ${p.numero} — Best Medical`;
   const empresa = p.empresa || 'cliente';
+  const referenteA = (opts.referenteA || '').trim();
   const total = brl(p.total);
 
   const html = `
@@ -27,8 +28,8 @@ export function montarEmailProposta(
       ${saudacaoEmail({ semPrincipal: opts.semPrincipal, nomePrincipal: opts.nomePrincipal ?? p.solicitante, empresa: p.empresa })}
     </p>
     <p style="font-size:14px; line-height:1.6;">
-      Segue em anexo a proposta de contrato <strong>${p.numero}</strong> referente à
-      ${empresa}. O documento em PDF contém as condições do atendimento e os valores.
+      Segue em anexo a proposta de contrato <strong>${p.numero}</strong>${referenteA ? ` referente à ${referenteA}` : ''}.
+      O documento em PDF contém as condições do atendimento e os valores.
     </p>
 
     <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;">

@@ -198,6 +198,7 @@ export class ContratoService {
     const { assunto, html } = montarEmailContrato(dadosPdf, {
       semPrincipal: usouSelecao && !resolvido.temPrincipal,
       nomePrincipal: resolvido.nomePrincipal,
+      referenteA: dto?.referenteA,
     });
 
     try {
