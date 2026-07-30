@@ -253,24 +253,56 @@ export class OrcamentosService {
       // endereço mais recentes (endereço, número, complemento etc.) — assim
       // o autocompletar por CNPJ sempre reflete a última edição.
       if (atual?.clienteId) {
-        await tx.cliente.update({
-          where: { id: atual.clienteId },
-          data: {
-            ...(dto.empresa ? { nome: dto.empresa } : {}),
-            ...(dto.cep !== undefined ? { cep: dto.cep } : {}),
-            ...(dto.endereco !== undefined ? { endereco: dto.endereco } : {}),
-            ...(dto.enderecoNumero !== undefined
-              ? { numero: dto.enderecoNumero }
-              : {}),
-            ...(dto.complemento !== undefined
-              ? { complemento: dto.complemento }
-              : {}),
-            ...(dto.bairro !== undefined ? { bairro: dto.bairro } : {}),
-            ...(dto.cidade !== undefined ? { cidade: dto.cidade } : {}),
-            ...(dto.estado !== undefined ? { estado: dto.estado } : {}),
-            ...(dto.pais ? { pais: dto.pais } : {}),
-          },
-        });
+        const cnpjNovo = dto.cnpj?.trim();
+        try {
+          await tx.cliente.update({
+            where: { id: atual.clienteId },
+            data: {
+              ...(dto.empresa ? { nome: dto.empresa } : {}),
+              ...(cnpjNovo ? { cnpj: cnpjNovo } : {}),
+              ...(dto.cep !== undefined ? { cep: dto.cep } : {}),
+              ...(dto.endereco !== undefined ? { endereco: dto.endereco } : {}),
+              ...(dto.enderecoNumero !== undefined
+                ? { numero: dto.enderecoNumero }
+                : {}),
+              ...(dto.complemento !== undefined
+                ? { complemento: dto.complemento }
+                : {}),
+              ...(dto.bairro !== undefined ? { bairro: dto.bairro } : {}),
+              ...(dto.cidade !== undefined ? { cidade: dto.cidade } : {}),
+              ...(dto.estado !== undefined ? { estado: dto.estado } : {}),
+              ...(dto.pais ? { pais: dto.pais } : {}),
+            },
+          });
+        } catch (e: any) {
+          // Se o CNPJ novo já pertence a outro cliente (unique constraint),
+          // não deixa a edição do orçamento falhar por causa disso — apenas
+          // atualiza os demais dados e mantém o CNPJ salvo como snapshot.
+          if (e?.code === 'P2002') {
+            await tx.cliente.update({
+              where: { id: atual.clienteId },
+              data: {
+                ...(dto.empresa ? { nome: dto.empresa } : {}),
+                ...(dto.cep !== undefined ? { cep: dto.cep } : {}),
+                ...(dto.endereco !== undefined
+                  ? { endereco: dto.endereco }
+                  : {}),
+                ...(dto.enderecoNumero !== undefined
+                  ? { numero: dto.enderecoNumero }
+                  : {}),
+                ...(dto.complemento !== undefined
+                  ? { complemento: dto.complemento }
+                  : {}),
+                ...(dto.bairro !== undefined ? { bairro: dto.bairro } : {}),
+                ...(dto.cidade !== undefined ? { cidade: dto.cidade } : {}),
+                ...(dto.estado !== undefined ? { estado: dto.estado } : {}),
+                ...(dto.pais ? { pais: dto.pais } : {}),
+              },
+            });
+          } else {
+            throw e;
+          }
+        }
       }
 
       return tx.orcamento.update({
