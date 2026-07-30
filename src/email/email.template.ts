@@ -1,13 +1,6 @@
 import { saudacaoEmail } from '../common/email/saudacao';
 // Template HTML do e-mail de envio do orçamento (simples e sóbrio).
 
-const brl = (v: number) =>
-  (v || 0).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-  });
-
 export function montarEmailOrcamento(
   o: any,
   opts: {
@@ -20,7 +13,6 @@ export function montarEmailOrcamento(
   const assunto = `Orçamento ${o.numero} — Best Medical`;
   const empresa = o.empresa || 'cliente';
   const referenteA = (opts.referenteA || '').trim();
-  const total = brl(o.total);
 
   const html = `
   <div style="font-family: Arial, Helvetica, sans-serif; color:#0f172a; max-width:560px; margin:0 auto;">
@@ -37,6 +29,8 @@ export function montarEmailOrcamento(
       O documento em PDF contém todos os detalhes do serviço e os valores.
     </p>
 
+    <!-- Sem valores no corpo do e-mail: o total e o detalhamento financeiro
+         ficam só no PDF anexado. -->
     <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;">
       <tr>
         <td style="padding:8px 0; color:#64748b;">Número do orçamento</td>
@@ -44,13 +38,9 @@ export function montarEmailOrcamento(
       </tr>
       ${
         o.modalidade
-          ? `<tr><td style="padding:8px 0; color:#64748b;">Modalidade</td><td style="padding:8px 0; text-align:right;">${o.modalidade}</td></tr>`
+          ? `<tr><td style="padding:8px 0; color:#64748b; border-top:1px solid #e2e8f0;">Modalidade</td><td style="padding:8px 0; text-align:right; border-top:1px solid #e2e8f0;">${o.modalidade}</td></tr>`
           : ''
       }
-      <tr>
-        <td style="padding:10px 0; color:#0f172a; font-weight:bold; border-top:1px solid #e2e8f0;">Total do orçamento</td>
-        <td style="padding:10px 0; text-align:right; font-weight:bold; font-size:16px; color:#0d7d8a; border-top:1px solid #e2e8f0;">${total}</td>
-      </tr>
     </table>
 
     ${
