@@ -1,13 +1,6 @@
 import { saudacaoEmail } from '../common/email/saudacao';
 // Template HTML do e-mail de envio da proposta de contrato (simples e sóbrio).
 
-const brl = (v: number) =>
-  (v || 0).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-  });
-
 export function montarEmailProposta(
   p: any,
   opts: {
@@ -20,7 +13,6 @@ export function montarEmailProposta(
   const assunto = `Proposta de Contrato ${p.numero} — Best Medical`;
   const empresa = p.empresa || 'cliente';
   const referenteA = (opts.referenteA || '').trim();
-  const total = brl(p.total);
 
   const html = `
   <div style="font-family: Arial, Helvetica, sans-serif; color:#0f172a; max-width:560px; margin:0 auto;">
@@ -37,6 +29,8 @@ export function montarEmailProposta(
       O documento em PDF contém as condições do atendimento e os valores.
     </p>
 
+    <!-- Sem valores no corpo do e-mail: o total e as condições financeiras
+         ficam só no PDF anexado. -->
     <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;">
       <tr>
         <td style="padding:8px 0; color:#64748b;">Número da proposta</td>
@@ -44,13 +38,9 @@ export function montarEmailProposta(
       </tr>
       ${
         p.tipoContrato
-          ? `<tr><td style="padding:8px 0; color:#64748b;">Tipo de contrato</td><td style="padding:8px 0; text-align:right;">${p.tipoContrato}</td></tr>`
+          ? `<tr><td style="padding:8px 0; color:#64748b; border-top:1px solid #e2e8f0;">Tipo de contrato</td><td style="padding:8px 0; text-align:right; border-top:1px solid #e2e8f0;">${p.tipoContrato}</td></tr>`
           : ''
       }
-      <tr>
-        <td style="padding:10px 0; color:#0f172a; font-weight:bold; border-top:1px solid #e2e8f0;">Total mensal</td>
-        <td style="padding:10px 0; text-align:right; font-weight:bold; font-size:16px; color:#0d7d8a; border-top:1px solid #e2e8f0;">${total}</td>
-      </tr>
     </table>
 
     ${
