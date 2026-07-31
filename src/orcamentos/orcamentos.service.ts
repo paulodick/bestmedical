@@ -90,13 +90,13 @@ export class OrcamentosService {
       // preenchido — assim não apagamos um dado salvo se o campo vier vazio.
       const dadosCadastro = {
         nome: dto.empresa || cliente?.nome || 'Cliente sem nome',
-        cep: dto.cep ?? cliente?.cep ?? null,
-        endereco: dto.endereco ?? cliente?.endereco ?? null,
-        numero: dto.enderecoNumero ?? cliente?.numero ?? null,
-        complemento: dto.complemento ?? cliente?.complemento ?? null,
-        bairro: dto.bairro ?? cliente?.bairro ?? null,
-        cidade: dto.cidade ?? cliente?.cidade ?? null,
-        estado: dto.estado ?? cliente?.estado ?? null,
+        cep: dto.cep?.trim() || cliente?.cep || null,
+        endereco: dto.endereco?.trim() || cliente?.endereco || null,
+        numero: dto.enderecoNumero?.trim() || cliente?.numero || null,
+        complemento: dto.complemento?.trim() || cliente?.complemento || null,
+        bairro: dto.bairro?.trim() || cliente?.bairro || null,
+        cidade: dto.cidade?.trim() || cliente?.cidade || null,
+        estado: dto.estado?.trim() || cliente?.estado || null,
         pais: dto.pais || cliente?.pais || 'Brasil',
       };
 
@@ -260,17 +260,20 @@ export class OrcamentosService {
             data: {
               ...(dto.empresa ? { nome: dto.empresa } : {}),
               ...(cnpjNovo ? { cnpj: cnpjNovo } : {}),
-              ...(dto.cep !== undefined ? { cep: dto.cep } : {}),
-              ...(dto.endereco !== undefined ? { endereco: dto.endereco } : {}),
-              ...(dto.enderecoNumero !== undefined
+              // Só sobrescreve com valor não vazio: uma submissão com o
+              // campo em branco (ex.: formulário ainda não recarregou o
+              // endereço) não deve apagar um endereço já cadastrado.
+              ...(dto.cep?.trim() ? { cep: dto.cep } : {}),
+              ...(dto.endereco?.trim() ? { endereco: dto.endereco } : {}),
+              ...(dto.enderecoNumero?.trim()
                 ? { numero: dto.enderecoNumero }
                 : {}),
-              ...(dto.complemento !== undefined
+              ...(dto.complemento?.trim()
                 ? { complemento: dto.complemento }
                 : {}),
-              ...(dto.bairro !== undefined ? { bairro: dto.bairro } : {}),
-              ...(dto.cidade !== undefined ? { cidade: dto.cidade } : {}),
-              ...(dto.estado !== undefined ? { estado: dto.estado } : {}),
+              ...(dto.bairro?.trim() ? { bairro: dto.bairro } : {}),
+              ...(dto.cidade?.trim() ? { cidade: dto.cidade } : {}),
+              ...(dto.estado?.trim() ? { estado: dto.estado } : {}),
               ...(dto.pais ? { pais: dto.pais } : {}),
             },
           });
@@ -283,19 +286,17 @@ export class OrcamentosService {
               where: { id: atual.clienteId },
               data: {
                 ...(dto.empresa ? { nome: dto.empresa } : {}),
-                ...(dto.cep !== undefined ? { cep: dto.cep } : {}),
-                ...(dto.endereco !== undefined
-                  ? { endereco: dto.endereco }
-                  : {}),
-                ...(dto.enderecoNumero !== undefined
+                ...(dto.cep?.trim() ? { cep: dto.cep } : {}),
+                ...(dto.endereco?.trim() ? { endereco: dto.endereco } : {}),
+                ...(dto.enderecoNumero?.trim()
                   ? { numero: dto.enderecoNumero }
                   : {}),
-                ...(dto.complemento !== undefined
+                ...(dto.complemento?.trim()
                   ? { complemento: dto.complemento }
                   : {}),
-                ...(dto.bairro !== undefined ? { bairro: dto.bairro } : {}),
-                ...(dto.cidade !== undefined ? { cidade: dto.cidade } : {}),
-                ...(dto.estado !== undefined ? { estado: dto.estado } : {}),
+                ...(dto.bairro?.trim() ? { bairro: dto.bairro } : {}),
+                ...(dto.cidade?.trim() ? { cidade: dto.cidade } : {}),
+                ...(dto.estado?.trim() ? { estado: dto.estado } : {}),
                 ...(dto.pais ? { pais: dto.pais } : {}),
               },
             });
