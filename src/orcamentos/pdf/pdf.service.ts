@@ -359,22 +359,14 @@ export class PdfService {
       });
     }
 
-    // ===== Observações / texto final =====
-    if (o.observacoes || o.textoFinal) {
-      const obs: Content[] = [];
-      if (o.observacoes)
-        obs.push({
-          text: [
-            { text: 'Observações: ', bold: true, color: SLATE700 },
-            { text: o.observacoes, color: SLATE600 },
-          ],
-          fontSize: 10,
-          margin: [0, 0, 0, 6],
-        });
-      if (o.textoFinal)
-        obs.push({ text: o.textoFinal, color: SLATE600, fontSize: 10 });
+    // ===== Texto final =====
+    // O campo "observacoes" é rotulado no formulário como "Observações
+    // Internas (Não aparecem no PDF)" — de propósito não é renderizado
+    // aqui. Só o texto final (condições/observações voltadas ao cliente)
+    // aparece no documento.
+    if (o.textoFinal) {
       content.push({
-        stack: obs,
+        stack: [{ text: o.textoFinal, color: SLATE600, fontSize: 10 }],
         margin: [0, 6, 0, 0],
       });
     }

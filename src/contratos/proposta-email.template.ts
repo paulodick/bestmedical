@@ -18,7 +18,7 @@ export function montarEmailProposta(
   <div style="font-family: Arial, Helvetica, sans-serif; color:#0f172a; max-width:560px; margin:0 auto;">
     <div style="border-bottom:3px solid #0d7d8a; padding-bottom:12px; margin-bottom:16px;">
       <div style="font-size:18px; font-weight:bold; color:#0f172a;">Best Medical</div>
-      <div style="font-size:12px; color:#64748b;">Manutenção de Equipamentos Médicos</div>
+      <div style="font-size:12px; color:#64748b; font-style:italic;">When uptime matters.</div>
     </div>
 
     <p style="font-size:14px; line-height:1.6;">
@@ -30,24 +30,26 @@ export function montarEmailProposta(
     </p>
 
     <!-- Sem valores no corpo do e-mail: o total e as condições financeiras
-         ficam só no PDF anexado. -->
-    <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;">
-      <tr>
-        <td style="padding:8px 0; color:#64748b;">Número da proposta</td>
-        <td style="padding:8px 0; text-align:right; font-weight:bold;">${p.numero}</td>
-      </tr>
+         ficam só no PDF anexado. Número + observações destacados numa caixa
+         com borda arredondada, com fonte um pouco menor. -->
+    <div style="border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin:16px 0;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <tr>
+          <td style="padding:6px 0; color:#64748b;">Número da proposta</td>
+          <td style="padding:6px 0; text-align:right; font-weight:bold;">${p.numero}</td>
+        </tr>
+        ${
+          p.tipoContrato
+            ? `<tr><td style="padding:6px 0; color:#64748b; border-top:1px solid #e2e8f0;">Tipo de contrato</td><td style="padding:6px 0; text-align:right; border-top:1px solid #e2e8f0;">${p.tipoContrato}</td></tr>`
+            : ''
+        }
+      </table>
       ${
-        p.tipoContrato
-          ? `<tr><td style="padding:8px 0; color:#64748b; border-top:1px solid #e2e8f0;">Tipo de contrato</td><td style="padding:8px 0; text-align:right; border-top:1px solid #e2e8f0;">${p.tipoContrato}</td></tr>`
+        p.textoFinal
+          ? `<p style="font-size:12px; color:#475569; line-height:1.6; margin:12px 0 0;">${p.textoFinal}</p>`
           : ''
       }
-    </table>
-
-    ${
-      p.textoFinal
-        ? `<p style="font-size:13px; color:#475569; line-height:1.6;">${p.textoFinal}</p>`
-        : ''
-    }
+    </div>
 
     <p style="font-size:14px; line-height:1.6;">
       Ficamos à disposição para qualquer esclarecimento.
