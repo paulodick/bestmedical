@@ -395,6 +395,14 @@ export class OrcamentosService {
       data.dataPagamento = dto.dataPagamento
         ? new Date(dto.dataPagamento)
         : null;
+    // Condição de pagamento (texto) é mutuamente exclusiva com a data na UI:
+    // ao gravar uma, o front já manda a outra como null, mas garantimos aqui
+    // também — nunca fica com as duas preenchidas ao mesmo tempo.
+    if (dto.condicaoPagamento !== undefined) {
+      data.condicaoPagamento = dto.condicaoPagamento || null;
+      if (dto.condicaoPagamento) data.dataPagamento = null;
+    }
+    if (dto.dataPagamento) data.condicaoPagamento = null;
 
     const orc = await this.prisma.orcamento.update({
       where: { id },
@@ -662,6 +670,8 @@ export class OrcamentosService {
       cancelado: o.statusCancelado ?? false,
       // data prevista do recebimento (yyyy-mm-dd) ou null
       dataPagamento: o.dataPagamento ? isoDate(o.dataPagamento) : null,
+      // condição de pagamento (texto livre) — alternativa à data acima
+      condicaoPagamento: o.condicaoPagamento ?? null,
       // quando foi enviado (usado na coluna "Enviado" do Controle)
       enviadoEm: o.enviadoEm ? new Date(o.enviadoEm).toISOString() : null,
       // listas

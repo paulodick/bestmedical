@@ -25,6 +25,9 @@ export class CreateRecebivelDto {
 
   @IsOptional() @IsBoolean() pago?: boolean;
   @IsOptional() @IsISO8601() dataPagamento?: string;
+  // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") —
+  // mutuamente exclusiva com dataPagamento na UI.
+  @IsOptional() @IsString() @MaxLength(60) condicaoPagamento?: string;
   @IsOptional() @IsString() @MaxLength(400) observacoes?: string;
 }
 
@@ -37,5 +40,8 @@ export class UpdateRecebivelDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) valor?: number;
   @IsOptional() @IsBoolean() pago?: boolean;
   @IsOptional() @IsISO8601() dataPagamento?: string;
+  // Condição de pagamento (texto livre) — pode ser enviada como string vazia
+  // "" para limpar o campo (o service converte para null).
+  @IsOptional() @IsString() @MaxLength(60) condicaoPagamento?: string;
   @IsOptional() @IsString() @MaxLength(400) observacoes?: string;
 }

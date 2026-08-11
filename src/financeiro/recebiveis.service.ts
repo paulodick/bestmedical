@@ -21,6 +21,9 @@ export interface RecebivelApi {
   valor: number;
   pago: boolean;
   dataPagamento: string | null;
+  // Condição de pagamento (texto livre) — alternativa à dataPagamento
+  // quando ainda não há uma data definida.
+  condicaoPagamento: string | null;
   observacoes: string | null;
 }
 
@@ -46,6 +49,7 @@ export class RecebiveisService {
     valorCentavos: number;
     pago: boolean;
     dataPagamento: Date | null;
+    condicaoPagamento: string | null;
     observacoes: string | null;
   }): RecebivelApi {
     return {
@@ -57,6 +61,7 @@ export class RecebiveisService {
       valor: centavosParaReais(r.valorCentavos),
       pago: r.pago,
       dataPagamento: dataParaIso(r.dataPagamento),
+      condicaoPagamento: r.condicaoPagamento ?? null,
       observacoes: r.observacoes,
     };
   }
@@ -101,6 +106,7 @@ export class RecebiveisService {
         valorCentavos: reaisParaCentavos(dto.valor),
         pago: dto.pago ?? false,
         dataPagamento: dto.dataPagamento ? isoParaData(dto.dataPagamento) : null,
+        condicaoPagamento: dto.dataPagamento ? null : dto.condicaoPagamento || null,
         observacoes: dto.observacoes ?? null,
       },
     });
@@ -122,6 +128,13 @@ export class RecebiveisService {
       data.dataPagamento = dto.dataPagamento
         ? isoParaData(dto.dataPagamento)
         : null;
+    // Condição de pagamento (texto) é mutuamente exclusiva com a data na UI;
+    // garantimos aqui também que as duas nunca ficam preenchidas juntas.
+    if (dto.condicaoPagamento !== undefined) {
+      data.condicaoPagamento = dto.condicaoPagamento || null;
+      if (dto.condicaoPagamento) data.dataPagamento = null;
+    }
+    if (dto.dataPagamento) data.condicaoPagamento = null;
     if (dto.observacoes !== undefined)
       data.observacoes = dto.observacoes ?? null;
 
