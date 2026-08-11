@@ -94,6 +94,9 @@ model CrmContato {
   // Pessoal: marca contatos pessoais (não profissionais). Continua no banco,
   // mas pode ser ocultado por filtro na tela do CRM.
   pessoal         Boolean  @default(false)
+  // Atendido: marca contatos já atendidos (já tiveram orçamento/proposta/
+  // venda com a Best Medical) — organiza a prospecção no CRM.
+  atendido        Boolean  @default(false)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
