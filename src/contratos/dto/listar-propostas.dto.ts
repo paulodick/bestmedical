@@ -49,6 +49,9 @@ export class UpdateStatusPropostaDto {
   @IsOptional() cancelado?: boolean;
   // Data prevista do recebimento (yyyy-mm-dd) ou null para limpar
   @IsOptional() @IsString() dataPagamento?: string | null;
+  // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") — ou
+  // null para limpar. Mutuamente exclusiva com dataPagamento na UI.
+  @IsOptional() @IsString() condicaoPagamento?: string | null;
 }
 
 // Upload do contrato assinado (PDF) em base64.
