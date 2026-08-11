@@ -27,6 +27,9 @@ export class ParcelaDto {
   @Type(() => Number) @IsInt() numero: number;
   // data no formato ISO yyyy-mm-dd (ou vazio)
   @IsOptional() @IsString() data?: string;
+  // condição de vencimento em texto livre (ex.: "Antecipado", "30 dias") —
+  // alternativa à data no mesmo campo da UI. Mutuamente exclusiva com data.
+  @IsOptional() @IsString() condicaoVencimento?: string | null;
   // valor em reais (decimal)
   @IsOptional() @Type(() => Number) @IsNumber() valor?: number;
   @IsOptional() @IsBoolean() pago?: boolean;

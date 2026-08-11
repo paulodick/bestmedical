@@ -156,7 +156,8 @@ export class OrcamentosService {
 
     const parcelasEntrada: ParcelaCalc[] = (dto.parcelas || []).map((p) => ({
       numero: p.numero,
-      data: p.data || '',
+      data: p.condicaoVencimento ? '' : p.data || '',
+      condicaoVencimento: p.condicaoVencimento || null,
       valorCentavos: reaisParaCentavos(p.valor),
       pago: p.pago,
     }));
@@ -235,6 +236,7 @@ export class OrcamentosService {
           create: parcelas.map((p) => ({
             numero: p.numero,
             dataVencimento: p.data ? new Date(p.data) : null,
+            condicaoVencimento: p.condicaoVencimento || null,
             valorCentavos: p.valorCentavos,
             pago: !!p.pago,
           })),
@@ -365,6 +367,7 @@ export class OrcamentosService {
             create: parcelas.map((p) => ({
               numero: p.numero,
               dataVencimento: p.data ? new Date(p.data) : null,
+              condicaoVencimento: p.condicaoVencimento || null,
               valorCentavos: p.valorCentavos,
               pago: !!p.pago,
             })),
@@ -700,6 +703,7 @@ export class OrcamentosService {
         id: p.id,
         numero: p.numero,
         data: isoDate(p.dataVencimento),
+        condicaoVencimento: p.condicaoVencimento ?? null,
         valor: centavosParaReais(p.valorCentavos),
         pago: p.pago,
       })),

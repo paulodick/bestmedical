@@ -61,6 +61,9 @@ export const distribuirIgual = (total: number, n: number): number[] => {
 export interface ParcelaCalc {
   numero: number;
   data: string; // ISO ou ''
+  // condição de vencimento em texto livre (ex.: "Antecipado") — alternativa
+  // à data no mesmo campo da UI; não participa do cálculo de datas/valores.
+  condicaoVencimento?: string | null;
   valorCentavos: number;
   pago?: boolean;
 }
