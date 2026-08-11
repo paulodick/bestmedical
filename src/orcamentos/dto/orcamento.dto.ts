@@ -80,6 +80,11 @@ export class CreateOrcamentoDto {
   @IsOptional() @IsString() observacoes?: string;
   @IsOptional() @IsString() textoFinal?: string;
 
+  // Data de pagamento prevista (yyyy-mm-dd) OU condição de pagamento em
+  // texto livre (ex.: "Antecipado", "30 dias") — mutuamente exclusivos.
+  @IsOptional() @IsString() dataPagamento?: string | null;
+  @IsOptional() @IsString() condicaoPagamento?: string | null;
+
   // Status
   @IsOptional() @IsBoolean() enviado?: boolean;
   @IsOptional() @IsBoolean() aprovado?: boolean;

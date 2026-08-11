@@ -207,6 +207,13 @@ export class OrcamentosService {
         // finalização
         observacoes: dto.observacoes,
         textoFinal: dto.textoFinal ?? TEXTO_FINAL_PADRAO,
+        // pagamento previsto (data OU condição em texto livre — mutuamente exclusivos)
+        dataPagamento: dto.condicaoPagamento
+          ? null
+          : dto.dataPagamento
+            ? new Date(dto.dataPagamento)
+            : null,
+        condicaoPagamento: dto.condicaoPagamento || null,
         // status
         statusEnviado: !!dto.enviado,
         statusAprovado: !!dto.aprovado,
@@ -332,6 +339,13 @@ export class OrcamentosService {
           totalCentavos: totalManualCentavos ?? totais.totalCentavos,
           observacoes: dto.observacoes,
           textoFinal: dto.textoFinal ?? TEXTO_FINAL_PADRAO,
+          // pagamento previsto (data OU condição em texto livre — mutuamente exclusivos)
+          dataPagamento: dto.condicaoPagamento
+            ? null
+            : dto.dataPagamento
+              ? new Date(dto.dataPagamento)
+              : null,
+          condicaoPagamento: dto.condicaoPagamento || null,
           statusEnviado: !!dto.enviado,
           statusAprovado: !!dto.aprovado,
           statusRealizado: !!dto.realizado,
