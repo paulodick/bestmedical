@@ -41,6 +41,10 @@ export class CreateCrmContatoDto {
   // Atendido: marca contato já atendido (já teve orçamento/proposta/venda
   // com a Best Medical), para organizar a prospecção.
   @IsOptional() @IsBoolean() atendido?: boolean;
+
+  // Tem WhatsApp: marcador filtrável (manual ou por verificação cruzada
+  // com o WhatsApp Web).
+  @IsOptional() @IsBoolean() temWhatsapp?: boolean;
 }
 
 export class UpdateCrmContatoDto extends CreateCrmContatoDto {}
