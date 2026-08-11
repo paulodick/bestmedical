@@ -372,6 +372,10 @@ model Proposta {
   statusCancelado          Boolean   @default(false) @map("status_cancelado")
   // Data prevista do recebimento (usada p/ acionar Atrasado automaticamente)
   dataPagamento            DateTime? @map("data_pagamento") @db.Date
+  // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") — usada
+  // quando ainda não há uma data definida. Mutuamente exclusivo com
+  // dataPagamento na UI (Recebíveis).
+  condicaoPagamento        String?   @map("condicao_pagamento")
   // Data de início da vigência do contrato. Enquanto vazia, o contrato NÃO
   // entra no Controle Financeiro (pagamento mensal ainda não ativado).
   inicioContrato           DateTime? @map("inicio_contrato") @db.Date

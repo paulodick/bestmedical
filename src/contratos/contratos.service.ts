@@ -399,6 +399,12 @@ export class ContratosService {
       data.dataPagamento = dto.dataPagamento
         ? new Date(dto.dataPagamento)
         : null;
+    // Condição de pagamento (texto) é mutuamente exclusiva com a data na UI.
+    if (dto.condicaoPagamento !== undefined) {
+      data.condicaoPagamento = dto.condicaoPagamento || null;
+      if (dto.condicaoPagamento) data.dataPagamento = null;
+    }
+    if (dto.dataPagamento) data.condicaoPagamento = null;
 
     const prop = await this.prisma.proposta.update({
       where: { id },
@@ -625,6 +631,7 @@ export class ContratosService {
       atrasado: p.statusAtrasado ?? false,
       cancelado: p.statusCancelado ?? false,
       dataPagamento: p.dataPagamento ? isoDate(p.dataPagamento) : null,
+      condicaoPagamento: p.condicaoPagamento ?? null,
       // início da vigência do contrato (gate do Controle Financeiro)
       inicioContrato: p.inicioContrato ? isoDate(p.inicioContrato) : null,
       // envio
