@@ -37,6 +37,10 @@ export class CreateCrmContatoDto {
 
   // Pessoal: marca contato como pessoal (não profissional).
   @IsOptional() @IsBoolean() pessoal?: boolean;
+
+  // Atendido: marca contato já atendido (já teve orçamento/proposta/venda
+  // com a Best Medical), para organizar a prospecção.
+  @IsOptional() @IsBoolean() atendido?: boolean;
 }
 
 export class UpdateCrmContatoDto extends CreateCrmContatoDto {}
