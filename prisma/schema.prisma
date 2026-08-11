@@ -201,6 +201,9 @@ model Parcela {
   orcamentoId    String    @map("orcamento_id")
   numero         Int
   dataVencimento DateTime? @map("data_vencimento") @db.Date
+  // Condição de vencimento em texto livre (ex.: "Antecipado", "30 dias") —
+  // alternativa à dataVencimento no mesmo campo da UI (Data Pagamento).
+  condicaoVencimento String? @map("condicao_vencimento")
   valorCentavos  Int       @default(0) @map("valor_centavos")
   pago           Boolean   @default(false)
   pagoEm         DateTime? @map("pago_em") @db.Date
