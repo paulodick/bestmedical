@@ -159,6 +159,10 @@ model Orcamento {
   statusCancelado          Boolean   @default(false) @map("status_cancelado")
   // Data prevista do recebimento (usada p/ acionar Atrasado automaticamente)
   dataPagamento            DateTime? @map("data_pagamento") @db.Date
+  // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") — usada
+  // quando ainda não há uma data definida. Mutuamente exclusivo com
+  // dataPagamento na UI (Controle).
+  condicaoPagamento        String?   @map("condicao_pagamento")
   enviadoEm                DateTime? @map("enviado_em")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -506,6 +510,9 @@ model Recebivel {
   // Situação de recebimento.
   pago          Boolean   @default(false)
   dataPagamento DateTime? @map("data_pagamento")
+  // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") —
+  // mutuamente exclusiva com dataPagamento na UI (Recebíveis).
+  condicaoPagamento String? @map("condicao_pagamento")
   observacoes   String?
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")

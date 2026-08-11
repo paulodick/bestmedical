@@ -43,4 +43,7 @@ export class UpdateStatusDto {
   @IsOptional() cancelado?: boolean;
   // Data prevista do recebimento (yyyy-mm-dd) ou null para limpar
   @IsOptional() @IsString() dataPagamento?: string | null;
+  // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") — ou
+  // null para limpar. Mutuamente exclusiva com dataPagamento na UI.
+  @IsOptional() @IsString() condicaoPagamento?: string | null;
 }
