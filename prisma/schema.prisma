@@ -97,6 +97,9 @@ model CrmContato {
   // Atendido: marca contatos já atendidos (já tiveram orçamento/proposta/
   // venda com a Best Medical) — organiza a prospecção no CRM.
   atendido        Boolean  @default(false)
+  // Tem WhatsApp: marcador filtrável, preenchido manualmente ou por
+  // verificação cruzada com a lista de contatos do WhatsApp Web.
+  temWhatsapp     Boolean  @default(false) @map("tem_whatsapp")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
