@@ -89,6 +89,18 @@ export class ContratosController {
     return this.contratos.updateStatus(id, dto);
   }
 
+  // Marca/desmarca uma mensalidade específica como paga (independente das
+  // demais) — usado na Recebíveis, modo Planilha.
+  @Roles('admin', 'operador')
+  @Patch(':id/parcelas/:parcelaId')
+  togglePagoParcela(
+    @Param('id') id: string,
+    @Param('parcelaId') parcelaId: string,
+    @Body() dto: { pago: boolean },
+  ) {
+    return this.contratos.togglePagoParcela(id, parcelaId, !!dto.pago);
+  }
+
   @Roles('admin', 'operador')
   @Post(':id/enviar')
   enviar(

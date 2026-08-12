@@ -49,6 +49,21 @@ export const addDias = (iso: string, dias: number): string => {
   return dt.toISOString().slice(0, 10);
 };
 
+// Soma N meses corridos a uma data ISO yyyy-mm-dd, preservando o dia do mês
+// quando possível (clampa para o último dia do mês de destino quando o mês
+// de origem tem mais dias — ex.: 31/01 + 1 mês = 28 ou 29/02, nunca 03/03).
+export const addMeses = (iso: string, meses: number): string => {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const alvo = new Date(Date.UTC(y, m - 1 + meses, 1));
+  const ultimoDiaDoMesAlvo = new Date(
+    Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  alvo.setUTCDate(Math.min(d, ultimoDiaDoMesAlvo));
+  return alvo.toISOString().slice(0, 10);
+};
+
 // Divide um total igualmente entre n parcelas (resíduo na última)
 export const distribuirIgual = (total: number, n: number): number[] => {
   if (n <= 0) return [];

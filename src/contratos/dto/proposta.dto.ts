@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -27,6 +28,10 @@ export class CreatePropostaDto {
   @IsOptional() @IsString() data?: string;
   // Data de início da vigência do contrato (ISO yyyy-mm-dd) ou null.
   @IsOptional() @IsString() inicioContrato?: string | null;
+  // Período de vigência do contrato, em meses (padrão 12). Determina quantas
+  // parcelas mensais são geradas em Recebíveis.
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(120)
+  vigenciaMeses?: number;
 
   // Vínculo direto OU dados avulsos do cliente/solicitante
   @IsOptional() @IsString() clienteId?: string;
