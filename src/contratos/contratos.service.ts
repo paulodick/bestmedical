@@ -11,6 +11,7 @@ import {
   calcTotais,
   centavosParaReais,
   reaisParaCentavos,
+  addMeses,
 } from '../orcamentos/orcamento.calc';
 import { PropostaPdfService } from './pdf/proposta-pdf.service';
 import { EmailService } from '../email/email.service';
@@ -34,6 +35,7 @@ const PROP_INCLUDE = {
   equipamentos: { orderBy: { ordem: 'asc' } },
   cliente: true,
   contato: true,
+  parcelasContrato: { orderBy: { numero: 'asc' } },
 } satisfies Prisma.PropostaInclude;
 
 @Injectable()
@@ -163,6 +165,7 @@ export class ContratosService {
         numero,
         data: dto.data ? new Date(dto.data) : new Date(),
         inicioContrato: dto.inicioContrato ? new Date(dto.inicioContrato) : null,
+        vigenciaMeses: dto.vigenciaMeses || 12,
         clienteId,
         contatoId,
         criadoPor: userId,
@@ -204,7 +207,18 @@ export class ContratosService {
       include: PROP_INCLUDE,
     });
 
-    return this.serialize(prop);
+    await this.sincronizarParcelasContrato(
+      prop.id,
+      prop.inicioContrato,
+      prop.vigenciaMeses,
+      prop.totalCentavos,
+    );
+    const propComParcelas = await this.prisma.proposta.findUnique({
+      where: { id: prop.id },
+      include: PROP_INCLUDE,
+    });
+
+    return this.serialize(propComParcelas ?? prop);
   }
 
   // ===== Atualizar (substitui os equipamentos) =====
@@ -258,6 +272,9 @@ export class ContratosService {
                   : null,
               }
             : {}),
+          ...(dto.vigenciaMeses !== undefined
+            ? { vigenciaMeses: dto.vigenciaMeses || 12 }
+            : {}),
           clienteNomeSnap: dto.empresa,
           clienteCnpjSnap: dto.cnpj,
           solicitanteSnap: dto.solicitante,
@@ -299,7 +316,18 @@ export class ContratosService {
       });
     }
 
-    return this.serialize(prop);
+    await this.sincronizarParcelasContrato(
+      prop.id,
+      prop.inicioContrato,
+      prop.vigenciaMeses,
+      prop.totalCentavos,
+    );
+    const propComParcelas = await this.prisma.proposta.findUnique({
+      where: { id: prop.id },
+      include: PROP_INCLUDE,
+    });
+
+    return this.serialize(propComParcelas ?? prop);
   }
 
   // ===== Listar com filtros, busca, ordenação e paginação =====
@@ -566,6 +594,73 @@ export class ContratosService {
     };
   }
 
+  // ===== Gera/ajusta as parcelas mensais do contrato =====
+  // Cria as parcelas que ainda faltam (numero > máximo existente) até
+  // completar vigenciaMeses, uma por mês a partir do dia-do-mês de
+  // inicioContrato. NUNCA sobrescreve uma parcela já existente (preserva
+  // data/condição/pago editados manualmente, inclusive parcelas pagas fora
+  // do padrão). Se a vigência diminuir, remove só as excedentes ainda não
+  // pagas — uma parcela paga nunca é apagada automaticamente.
+  private async sincronizarParcelasContrato(
+    propostaId: string,
+    inicioContrato: Date | null,
+    vigenciaMeses: number,
+    valorMensalCentavos: number,
+  ) {
+    if (!inicioContrato) return;
+    const inicioIso = new Date(inicioContrato).toISOString().slice(0, 10);
+    const alvo = Math.max(1, Math.floor(vigenciaMeses || 12));
+
+    const existentes = await this.prisma.parcelaContrato.findMany({
+      where: { propostaId },
+      orderBy: { numero: 'asc' },
+    });
+    const maxExistente = existentes.reduce(
+      (max, p) => Math.max(max, p.numero),
+      0,
+    );
+
+    const novas: Prisma.ParcelaContratoCreateManyInput[] = [];
+    for (let numero = maxExistente + 1; numero <= alvo; numero++) {
+      novas.push({
+        propostaId,
+        numero,
+        dataVencimento: new Date(addMeses(inicioIso, numero - 1)),
+        valorCentavos: valorMensalCentavos,
+      });
+    }
+    if (novas.length) {
+      await this.prisma.parcelaContrato.createMany({ data: novas });
+    }
+
+    const excedentes = existentes.filter((p) => p.numero > alvo && !p.pago);
+    if (excedentes.length) {
+      await this.prisma.parcelaContrato.deleteMany({
+        where: { id: { in: excedentes.map((p) => p.id) } },
+      });
+    }
+  }
+
+  // ===== Marca/desmarca uma PARCELA (mensalidade) individual como paga =====
+  async togglePagoParcela(id: string, parcelaId: string, pago: boolean) {
+    await this.ensure(id);
+    const parcela = await this.prisma.parcelaContrato.findUnique({
+      where: { id: parcelaId },
+    });
+    if (!parcela || parcela.propostaId !== id) {
+      throw new NotFoundException('Parcela não encontrada');
+    }
+    await this.prisma.parcelaContrato.update({
+      where: { id: parcelaId },
+      data: { pago, pagoEm: pago ? new Date() : null },
+    });
+    const prop = await this.prisma.proposta.findUnique({
+      where: { id },
+      include: PROP_INCLUDE,
+    });
+    return this.serialize(prop);
+  }
+
   private async ensure(id: string) {
     const p = await this.prisma.proposta.findUnique({ where: { id } });
     if (!p) throw new NotFoundException('Proposta não encontrada');
@@ -634,6 +729,18 @@ export class ContratosService {
       condicaoPagamento: p.condicaoPagamento ?? null,
       // início da vigência do contrato (gate do Controle Financeiro)
       inicioContrato: p.inicioContrato ? isoDate(p.inicioContrato) : null,
+      // período de vigência (meses) — determina quantas parcelas mensais
+      // são geradas automaticamente em Recebíveis.
+      vigenciaMeses: p.vigenciaMeses ?? 12,
+      // parcelas mensais do contrato (pagamento recorrente)
+      parcelas: (p.parcelasContrato || []).map((pc: any) => ({
+        id: pc.id,
+        numero: pc.numero,
+        data: isoDate(pc.dataVencimento),
+        condicaoVencimento: pc.condicaoVencimento ?? null,
+        valor: centavosParaReais(pc.valorCentavos),
+        pago: pc.pago,
+      })),
       // envio
       enviadoEm: p.enviadoEm ? new Date(p.enviadoEm).toISOString() : null,
       // contrato assinado carregado (somente metadados; o arquivo é servido por rota própria)

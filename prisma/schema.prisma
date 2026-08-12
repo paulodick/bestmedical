@@ -382,6 +382,10 @@ model Proposta {
   // Data de início da vigência do contrato. Enquanto vazia, o contrato NÃO
   // entra no Controle Financeiro (pagamento mensal ainda não ativado).
   inicioContrato           DateTime? @map("inicio_contrato") @db.Date
+  // Período de vigência do contrato, em meses (padrão 12). Determina quantas
+  // parcelas mensais (ParcelaContrato) são geradas em Recebíveis, uma por
+  // mês a partir do dia do mês de inicioContrato.
+  vigenciaMeses            Int       @default(12) @map("vigencia_meses")
   enviadoEm                DateTime? @map("enviado_em")
 
   // Contrato assinado (PDF) carregado pelo usuário, armazenado em base64.
@@ -395,13 +399,35 @@ model Proposta {
   cliente      Cliente             @relation(fields: [clienteId], references: [id])
   contato      Contato?            @relation(fields: [contatoId], references: [id])
   criador      Usuario?            @relation(fields: [criadoPor], references: [id])
-  equipamentos ItemPropostaEquip[]
-  contrato     Contrato?
-  followUps    FollowUp[]
+  equipamentos     ItemPropostaEquip[]
+  contrato         Contrato?
+  followUps        FollowUp[]
+  parcelasContrato ParcelaContrato[]
 
   @@index([data])
   @@index([clienteId])
   @@map("propostas")
+}
+
+// Parcela mensal do pagamento recorrente de um contrato (Proposta). Gerada
+// automaticamente a partir de inicioContrato + vigenciaMeses; cada parcela
+// pode ser marcada como paga individualmente (o recebimento de um mês não
+// depende dos demais). Mesmo formato de Parcela (Orcamento), mas em tabela
+// própria pois o vínculo é com Proposta.
+model ParcelaContrato {
+  id             String    @id @default(uuid())
+  propostaId     String    @map("proposta_id")
+  numero         Int
+  dataVencimento DateTime? @map("data_vencimento") @db.Date
+  condicaoVencimento String? @map("condicao_vencimento")
+  valorCentavos  Int       @default(0) @map("valor_centavos")
+  pago           Boolean   @default(false)
+  pagoEm         DateTime? @map("pago_em") @db.Date
+
+  proposta Proposta @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+
+  @@index([propostaId])
+  @@map("parcelas_contrato")
 }
 
 // Registro de follow-up (acompanhamento comercial). Vinculado a um
