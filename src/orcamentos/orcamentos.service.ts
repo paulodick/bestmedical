@@ -437,6 +437,29 @@ export class OrcamentosService {
     return this.serialize(orc);
   }
 
+  // ===== Marca/desmarca uma PARCELA individual como paga =====
+  // Independente do status "pago" do orçamento inteiro — permite registrar
+  // que uma parcela específica (ex.: 2 de 3) já caiu, mesmo que as outras
+  // ainda não tenham vencido/sido pagas.
+  async togglePagoParcela(id: string, parcelaId: string, pago: boolean) {
+    await this.ensure(id);
+    const parcela = await this.prisma.parcela.findUnique({
+      where: { id: parcelaId },
+    });
+    if (!parcela || parcela.orcamentoId !== id) {
+      throw new NotFoundException('Parcela não encontrada');
+    }
+    await this.prisma.parcela.update({
+      where: { id: parcelaId },
+      data: { pago, pagoEm: pago ? new Date() : null },
+    });
+    const orc = await this.prisma.orcamento.findUnique({
+      where: { id },
+      include: ORC_INCLUDE,
+    });
+    return this.serialize(orc);
+  }
+
   // ===== Listar com filtros, busca, ordenação e paginação =====
   async list(q: ListarOrcamentosDto): Promise<Paginated<any>> {
     const where: Prisma.OrcamentoWhereInput = {};
