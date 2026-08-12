@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateDespesaDto, UpdateDespesaDto } from './dto/despesa.dto';
+import {
+  CreateDespesaDto,
+  UpdateDespesaDto,
+  UploadBoletoDespesaDto,
+  PrioridadeDespesa,
+} from './dto/despesa.dto';
 import { PaginationDto, Paginated } from '../common/dto/pagination.dto';
 import {
   reaisParaCentavos,
@@ -16,10 +21,15 @@ export interface DespesaApi {
   categoria: string | null;
   descricao: string | null;
   valor: number;
+  valorPago: number;
+  saldoDevedor: number;
   pago: boolean;
   dataPagamento: string | null;
   projeto: string | null;
   observacoes: string | null;
+  prioridade: PrioridadeDespesa | null;
+  boletoNome: string | null;
+  boletoEm: string | null;
 }
 
 // Converte 'yyyy-mm-dd' para Date à meia-noite UTC (evita deslocamento de fuso).
@@ -44,10 +54,14 @@ export class DespesasService {
     categoria: string | null;
     descricao: string | null;
     valorCentavos: number;
+    valorPagoCentavos: number;
     pago: boolean;
     dataPagamento: Date | null;
     projeto: string | null;
     observacoes: string | null;
+    prioridade: string | null;
+    boletoNome: string | null;
+    boletoEm: Date | null;
   }): DespesaApi {
     return {
       id: d.id,
@@ -56,10 +70,15 @@ export class DespesasService {
       categoria: d.categoria,
       descricao: d.descricao,
       valor: centavosParaReais(d.valorCentavos),
+      valorPago: centavosParaReais(d.valorPagoCentavos),
+      saldoDevedor: centavosParaReais(d.valorCentavos - d.valorPagoCentavos),
       pago: d.pago,
       dataPagamento: dataParaIso(d.dataPagamento),
       projeto: d.projeto,
       observacoes: d.observacoes,
+      prioridade: (d.prioridade as PrioridadeDespesa) ?? null,
+      boletoNome: d.boletoNome,
+      boletoEm: dataParaIso(d.boletoEm),
     };
   }
 
@@ -103,10 +122,12 @@ export class DespesasService {
         categoria: dto.categoria ?? null,
         descricao: dto.descricao ?? null,
         valorCentavos: reaisParaCentavos(dto.valor),
+        valorPagoCentavos: reaisParaCentavos(dto.valorPago ?? 0),
         pago: dto.pago ?? false,
         dataPagamento: dto.dataPagamento ? isoParaData(dto.dataPagamento) : null,
         projeto: dto.projeto ?? null,
         observacoes: dto.observacoes ?? null,
+        prioridade: dto.prioridade ?? null,
       },
     });
     return this.toApi(d);
@@ -124,6 +145,8 @@ export class DespesasService {
     if (dto.descricao !== undefined) data.descricao = dto.descricao ?? null;
     if (dto.valor !== undefined)
       data.valorCentavos = reaisParaCentavos(dto.valor);
+    if (dto.valorPago !== undefined)
+      data.valorPagoCentavos = reaisParaCentavos(dto.valorPago);
     if (dto.pago !== undefined) data.pago = dto.pago;
     if (dto.dataPagamento !== undefined)
       data.dataPagamento = dto.dataPagamento
@@ -132,9 +155,42 @@ export class DespesasService {
     if (dto.projeto !== undefined) data.projeto = dto.projeto ?? null;
     if (dto.observacoes !== undefined)
       data.observacoes = dto.observacoes ?? null;
+    if (dto.prioridade !== undefined) data.prioridade = dto.prioridade ?? null;
 
     const d = await this.prisma.despesa.update({ where: { id }, data });
     return this.toApi(d);
+  }
+
+  // ===== Boleto (upload/download) =====
+  // Mesmo padrão do contrato assinado em Proposta: arquivo salvo como base64
+  // em texto no próprio registro, servido de volta como binário.
+  async uploadBoleto(id: string, dto: UploadBoletoDespesaDto) {
+    await this.ensure(id);
+    const base64 = (dto.arquivoBase64 || '').trim();
+    if (!base64) throw new NotFoundException('Arquivo não enviado.');
+    const conteudo = base64.includes(',') ? base64.split(',').pop()! : base64;
+    const d = await this.prisma.despesa.update({
+      where: { id },
+      data: {
+        boletoArquivo: conteudo,
+        boletoNome: (dto.nome || '').trim() || 'boleto.pdf',
+        boletoEm: new Date(),
+      },
+    });
+    return this.toApi(d);
+  }
+
+  async getBoleto(id: string): Promise<{ buffer: Buffer; nome: string }> {
+    const d = await this.prisma.despesa.findUnique({
+      where: { id },
+      select: { boletoArquivo: true, boletoNome: true },
+    });
+    if (!d || !d.boletoArquivo)
+      throw new NotFoundException('Boleto não encontrado.');
+    return {
+      buffer: Buffer.from(d.boletoArquivo, 'base64'),
+      nome: d.boletoNome ?? 'boleto.pdf',
+    };
   }
 
   async remove(id: string) {

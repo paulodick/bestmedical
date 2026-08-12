@@ -7,12 +7,18 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { DespesasService } from './despesas.service';
 import { RecebiveisService } from './recebiveis.service';
 import { PessoalService } from './pessoal.service';
-import { CreateDespesaDto, UpdateDespesaDto } from './dto/despesa.dto';
+import {
+  CreateDespesaDto,
+  UpdateDespesaDto,
+  UploadBoletoDespesaDto,
+} from './dto/despesa.dto';
 import {
   CreateRecebivelDto,
   UpdateRecebivelDto,
@@ -65,6 +71,25 @@ export class DespesasController {
   @Delete('despesas/:id')
   remove(@Param('id') id: string) {
     return this.despesas.remove(id);
+  }
+
+  // ===== Boleto (upload/download) =====
+  @Roles('admin')
+  @Post('despesas/:id/boleto')
+  uploadBoleto(@Param('id') id: string, @Body() dto: UploadBoletoDespesaDto) {
+    return this.despesas.uploadBoleto(id, dto);
+  }
+
+  @Roles('admin')
+  @Get('despesas/:id/boleto')
+  async boletoDownload(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, nome } = await this.despesas.getBoleto(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${nome}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   // ===== Recebíveis avulsos (manuais) =====
