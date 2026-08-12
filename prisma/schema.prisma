@@ -16,6 +16,13 @@ enum Perfil {
   visualizador
 }
 
+enum Prioridade {
+  preto
+  vermelho
+  amarelo
+  verde
+}
+
 model Usuario {
   id        String   @id @default(uuid())
   nome      String
@@ -505,26 +512,35 @@ model ItemPropostaEquip {
 // "Despesas" da planilha de controle. Valor armazenado em centavos (Int) e
 // exposto em reais pela API, seguindo a convenção dos orçamentos.
 model Despesa {
-  id            String    @id @default(uuid())
+  id                String      @id @default(uuid())
   // Data de competência/vencimento (yyyy-mm-dd no fuso local, guardada em UTC).
-  data          DateTime
-  fornecedor    String
+  data              DateTime
+  fornecedor        String
   // Categoria livre (ex.: Peças, Impostos, Salários, Transporte...).
-  categoria     String?
-  descricao     String?
-  valorCentavos Int       @map("valor_centavos")
+  categoria         String?
+  descricao         String?
+  valorCentavos     Int         @map("valor_centavos")
+  // Quanto já foi pago (permite pagamento parcial). Saldo devedor = valor - valorPago.
+  valorPagoCentavos Int         @default(0) @map("valor_pago_centavos")
   // Situação de pagamento.
-  pago          Boolean   @default(false)
+  pago              Boolean     @default(false)
   // Data em que foi efetivamente paga (opcional).
-  dataPagamento DateTime? @map("data_pagamento")
+  dataPagamento     DateTime?   @map("data_pagamento")
   // Projeto/centro de custo opcional (ex.: nome do hospital/contrato).
-  projeto       String?
-  observacoes   String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  projeto           String?
+  observacoes       String?
+  // Prioridade visual (cor). Sem valor = sem prioridade definida.
+  prioridade        Prioridade?
+  // Boleto anexado (mesmo padrão do contrato assinado: base64 em texto).
+  boletoArquivo     String?     @db.Text @map("boleto_arquivo")
+  boletoNome        String?     @map("boleto_nome")
+  boletoEm          DateTime?   @map("boleto_em")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
 
   @@index([data])
   @@index([pago])
+  @@index([prioridade])
   @@map("despesas")
 }
 
