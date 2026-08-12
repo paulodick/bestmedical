@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export const STATUS_KEYS = [
@@ -46,4 +46,8 @@ export class UpdateStatusDto {
   // Condição de pagamento (texto livre, ex.: "Antecipado", "30 dias") — ou
   // null para limpar. Mutuamente exclusiva com dataPagamento na UI.
   @IsOptional() @IsString() condicaoPagamento?: string | null;
+}
+
+export class TogglePagoParcelaDto {
+  @IsBoolean() pago: boolean;
 }

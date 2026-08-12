@@ -18,6 +18,7 @@ import { CreateOrcamentoDto, UpdateOrcamentoDto } from './dto/orcamento.dto';
 import {
   ListarOrcamentosDto,
   UpdateStatusDto,
+  TogglePagoParcelaDto,
 } from './dto/listar-orcamentos.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EnviarComSolicitantesDto } from '../common/email/resolver-destinatarios';
@@ -86,6 +87,18 @@ export class OrcamentosController {
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.orcamentos.updateStatus(id, dto);
+  }
+
+  // Marca/desmarca uma parcela específica como paga (independente do
+  // status "pago" do orçamento inteiro) — usado na Recebíveis, modo Planilha.
+  @Roles('admin', 'operador')
+  @Patch(':id/parcelas/:parcelaId')
+  togglePagoParcela(
+    @Param('id') id: string,
+    @Param('parcelaId') parcelaId: string,
+    @Body() dto: TogglePagoParcelaDto,
+  ) {
+    return this.orcamentos.togglePagoParcela(id, parcelaId, dto.pago);
   }
 
   @Roles('admin', 'operador')
