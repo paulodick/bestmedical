@@ -49,6 +49,14 @@ export class DespesasController {
     return this.despesas.resumo();
   }
 
+  // Lista plana de lançamentos individuais (entradas e saídas já
+  // realizadas), usada pela página Fluxo de Caixa em formato de planilha.
+  @Roles('admin')
+  @Get('fluxo-caixa')
+  fluxoCaixa() {
+    return this.despesas.fluxoCaixa();
+  }
+
   @Roles('admin')
   @Get('despesas')
   list(@Query() q: PaginationDto) {

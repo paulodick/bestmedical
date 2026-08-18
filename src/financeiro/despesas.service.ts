@@ -32,6 +32,17 @@ export interface DespesaApi {
   boletoEm: string | null;
 }
 
+// Um lançamento individual de fluxo de caixa (entrada ou saída já realizada).
+export interface FluxoCaixaLancamento {
+  id: string;
+  data: string;
+  tipo: 'entrada' | 'saida';
+  origem: string;
+  descricao: string;
+  categoria: string;
+  valor: number;
+}
+
 // Converte 'yyyy-mm-dd' para Date à meia-noite UTC (evita deslocamento de fuso).
 function isoParaData(iso: string): Date {
   return new Date(`${iso}T00:00:00.000Z`);
@@ -203,6 +214,186 @@ export class DespesasService {
     const d = await this.prisma.despesa.findUnique({ where: { id } });
     if (!d) throw new NotFoundException('Despesa não encontrada');
     return d;
+  }
+
+  // ===== Fluxo de Caixa (planilha) =====
+  // Lista TODOS os lançamentos individuais já realizados (dinheiro que
+  // efetivamente entrou ou saiu) — uma linha por transação, não agregado
+  // por período. O agrupamento/filtro por dia, semana, mês ou ano é feito
+  // no frontend a partir dessa lista completa.
+  //
+  // Diferente de resumo() (que trata cada Orçamento/Proposta como um único
+  // valor, usando só o status_pago do documento inteiro), aqui cada
+  // parcela/mensalidade paga entra como seu próprio lançamento, na data em
+  // que foi de fato paga (pagoEm) — essencial agora que orçamentos
+  // parcelados e contratos com mensalidades (ParcelaContrato) podem ter
+  // algumas parcelas pagas e outras não.
+  async fluxoCaixa(): Promise<FluxoCaixaLancamento[]> {
+    const [orcamentos, propostas, recebiveis, despesas] = await Promise.all([
+      this.prisma.orcamento.findMany({
+        where: { statusCancelado: false },
+        select: {
+          numero: true,
+          data: true,
+          clienteNomeSnap: true,
+          totalCentavos: true,
+          totalManualCentavos: true,
+          statusPago: true,
+          dataPagamento: true,
+          parcelas: {
+            select: {
+              numero: true,
+              valorCentavos: true,
+              pago: true,
+              pagoEm: true,
+              dataVencimento: true,
+            },
+          },
+        },
+      }),
+      this.prisma.proposta.findMany({
+        where: { statusCancelado: false },
+        select: {
+          numero: true,
+          data: true,
+          clienteNomeSnap: true,
+          tipoContrato: true,
+          totalCentavos: true,
+          totalManualCentavos: true,
+          statusPago: true,
+          dataPagamento: true,
+          parcelasContrato: {
+            select: {
+              numero: true,
+              valorCentavos: true,
+              pago: true,
+              pagoEm: true,
+              dataVencimento: true,
+            },
+          },
+        },
+      }),
+      this.prisma.recebivel.findMany({
+        where: { pago: true },
+        select: {
+          id: true,
+          data: true,
+          empresa: true,
+          descricao: true,
+          valorCentavos: true,
+          dataPagamento: true,
+        },
+      }),
+      this.prisma.despesa.findMany({
+        select: {
+          id: true,
+          data: true,
+          fornecedor: true,
+          categoria: true,
+          descricao: true,
+          valorCentavos: true,
+          valorPagoCentavos: true,
+          pago: true,
+          dataPagamento: true,
+        },
+      }),
+    ]);
+
+    const totalEfetivo = (r: {
+      totalCentavos: number;
+      totalManualCentavos: number | null;
+    }) => r.totalManualCentavos ?? r.totalCentavos ?? 0;
+
+    const lancamentos: FluxoCaixaLancamento[] = [];
+
+    // ----- Entradas: Orçamentos -----
+    for (const o of orcamentos) {
+      if (o.parcelas.length > 0) {
+        for (const p of o.parcelas) {
+          if (!p.pago) continue;
+          lancamentos.push({
+            id: `orc-${o.numero}-p${p.numero}`,
+            data: dataParaIso(p.pagoEm ?? p.dataVencimento ?? o.data) as string,
+            tipo: 'entrada',
+            origem: o.clienteNomeSnap || '—',
+            descricao: `${o.numero} · parcela ${p.numero}/${o.parcelas.length}`,
+            categoria: 'Orçamento',
+            valor: centavosParaReais(p.valorCentavos),
+          });
+        }
+      } else if (o.statusPago) {
+        lancamentos.push({
+          id: `orc-${o.numero}`,
+          data: dataParaIso(o.dataPagamento ?? o.data) as string,
+          tipo: 'entrada',
+          origem: o.clienteNomeSnap || '—',
+          descricao: o.numero,
+          categoria: 'Orçamento',
+          valor: centavosParaReais(totalEfetivo(o)),
+        });
+      }
+    }
+
+    // ----- Entradas: Propostas (contratos) -----
+    for (const p of propostas) {
+      if (p.parcelasContrato.length > 0) {
+        for (const pc of p.parcelasContrato) {
+          if (!pc.pago) continue;
+          lancamentos.push({
+            id: `prop-${p.numero}-p${pc.numero}`,
+            data: dataParaIso(pc.pagoEm ?? pc.dataVencimento ?? p.data) as string,
+            tipo: 'entrada',
+            origem: p.clienteNomeSnap || '—',
+            descricao: `${p.numero} · mensalidade ${pc.numero}/${p.parcelasContrato.length}`,
+            categoria: p.tipoContrato || 'Contrato',
+            valor: centavosParaReais(pc.valorCentavos),
+          });
+        }
+      } else if (p.statusPago) {
+        lancamentos.push({
+          id: `prop-${p.numero}`,
+          data: dataParaIso(p.dataPagamento ?? p.data) as string,
+          tipo: 'entrada',
+          origem: p.clienteNomeSnap || '—',
+          descricao: p.numero,
+          categoria: p.tipoContrato || 'Contrato',
+          valor: centavosParaReais(totalEfetivo(p)),
+        });
+      }
+    }
+
+    // ----- Entradas: Recebíveis avulsos -----
+    for (const r of recebiveis) {
+      lancamentos.push({
+        id: `rec-${r.id}`,
+        data: dataParaIso(r.dataPagamento ?? r.data) as string,
+        tipo: 'entrada',
+        origem: r.empresa || '—',
+        descricao: r.descricao || 'Recebível avulso',
+        categoria: 'Avulso',
+        valor: centavosParaReais(r.valorCentavos),
+      });
+    }
+
+    // ----- Saídas: Despesas -----
+    // pago=true conta o valor cheio (assume-se quitada); senão, só o que já
+    // foi efetivamente pago (valorPagoCentavos), para refletir pagamentos
+    // parciais sem contar o saldo devedor como dinheiro que já saiu.
+    for (const d of despesas) {
+      const centavosPagos = d.pago ? d.valorCentavos : d.valorPagoCentavos;
+      if (centavosPagos <= 0) continue;
+      lancamentos.push({
+        id: `desp-${d.id}`,
+        data: dataParaIso(d.dataPagamento ?? d.data) as string,
+        tipo: 'saida',
+        origem: d.fornecedor,
+        descricao: d.descricao || d.fornecedor,
+        categoria: d.categoria || 'Sem categoria',
+        valor: centavosParaReais(centavosPagos),
+      });
+    }
+
+    return lancamentos.sort((a, b) => a.data.localeCompare(b.data));
   }
 
   // ===== Resumo financeiro (Dashboard + Fluxo de Caixa) =====
