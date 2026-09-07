@@ -1,19 +1,28 @@
 // ===== Prisma schema — Best Medical (Fase 1) =====
 // PostgreSQL. Valores monetários em centavos (Int). Datas em DateTime (@db.Date).
+//
+// Dois schemas Postgres no mesmo banco: "public" (dados da empresa) e
+// "pessoal" (Controle Financeiro Pessoal, exclusivo do admin master) —
+// tabelas fisicamente separadas, sem overlap, sem custo de infraestrutura
+// extra (mesmo banco bestmedical-db do Render).
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public", "pessoal"]
 }
 
 enum Perfil {
   admin
   operador
   visualizador
+
+  @@schema("public")
 }
 
 enum Prioridade {
@@ -21,6 +30,8 @@ enum Prioridade {
   vermelho
   amarelo
   verde
+
+  @@schema("public")
 }
 
 model Usuario {
@@ -40,6 +51,7 @@ model Usuario {
   followUps  FollowUp[]
 
   @@map("usuarios")
+  @@schema("public")
 }
 
 model Cliente {
@@ -62,6 +74,7 @@ model Cliente {
   propostas  Proposta[]
 
   @@map("clientes")
+  @@schema("public")
 }
 
 model Contato {
@@ -79,6 +92,7 @@ model Contato {
   propostas  Proposta[]
 
   @@map("contatos")
+  @@schema("public")
 }
 
 // ===== CRM — agenda de contatos independente =====
@@ -111,6 +125,7 @@ model CrmContato {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("crm_contatos")
+  @@schema("public")
 }
 
 model Orcamento {
@@ -186,6 +201,7 @@ model Orcamento {
   @@index([data])
   @@index([clienteId])
   @@map("orcamentos")
+  @@schema("public")
 }
 
 model ItemOrcamento {
@@ -201,6 +217,7 @@ model ItemOrcamento {
 
   @@index([orcamentoId])
   @@map("itens_orcamento")
+  @@schema("public")
 }
 
 model Parcela {
@@ -219,6 +236,7 @@ model Parcela {
 
   @@index([orcamentoId])
   @@map("parcelas")
+  @@schema("public")
 }
 
 model OrdemServico {
@@ -272,6 +290,7 @@ model OrdemServico {
   atendimentos AtendimentoOS[]
 
   @@map("ordens_servico")
+  @@schema("public")
 }
 
 // Conjunto de atendimento da OS: data + técnico + descrição. Substitui o
@@ -289,6 +308,7 @@ model AtendimentoOS {
 
   @@index([ordemId])
   @@map("atendimentos_os")
+  @@schema("public")
 }
 
 model ItemOS {
@@ -305,6 +325,7 @@ model ItemOS {
 
   @@index([ordemId])
   @@map("itens_os")
+  @@schema("public")
 }
 
 model FotoOS {
@@ -319,6 +340,7 @@ model FotoOS {
 
   @@index([ordemId])
   @@map("fotos_os")
+  @@schema("public")
 }
 
 // ===== Proposta de Contrato =====
@@ -414,6 +436,7 @@ model Proposta {
   @@index([data])
   @@index([clienteId])
   @@map("propostas")
+  @@schema("public")
 }
 
 // Parcela mensal do pagamento recorrente de um contrato (Proposta). Gerada
@@ -435,6 +458,7 @@ model ParcelaContrato {
 
   @@index([propostaId])
   @@map("parcelas_contrato")
+  @@schema("public")
 }
 
 // Registro de follow-up (acompanhamento comercial). Vinculado a um
@@ -455,6 +479,7 @@ model FollowUp {
   @@index([orcamentoId])
   @@index([propostaId])
   @@map("follow_ups")
+  @@schema("public")
 }
 
 // ===== Contrato =====
@@ -487,6 +512,7 @@ model Contrato {
   proposta Proposta @relation(fields: [propostaId], references: [id], onDelete: Cascade)
 
   @@map("contratos")
+  @@schema("public")
 }
 
 model ItemPropostaEquip {
@@ -505,6 +531,7 @@ model ItemPropostaEquip {
 
   @@index([propostaId])
   @@map("itens_proposta_equip")
+  @@schema("public")
 }
 
 // ===================== Despesa (Controle Financeiro) =====================
@@ -520,7 +547,8 @@ model Despesa {
   categoria         String?
   descricao         String?
   valorCentavos     Int         @map("valor_centavos")
-  // Quanto já foi pago (permite pagamento parcial). Saldo devedor = valor - valorPago.
+  // Total já pago (cache — soma de "baixas"; permite pagamento parcial).
+  // Saldo devedor = valor - valorPago.
   valorPagoCentavos Int         @default(0) @map("valor_pago_centavos")
   // Situação de pagamento.
   pago              Boolean     @default(false)
@@ -538,10 +566,33 @@ model Despesa {
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
+  baixas BaixaDespesa[]
+
   @@index([data])
   @@index([pago])
   @@index([prioridade])
   @@map("despesas")
+  @@schema("public")
+}
+
+// Cada pagamento (total ou parcial) registrado contra uma Despesa. Permite
+// baixar um valor de cada vez (ex.: R$2.000 de R$10.000, depois o restante)
+// mantendo data e forma de pagamento de cada baixa — histórico de verdade,
+// não só um número acumulado.
+model BaixaDespesa {
+  id             String   @id @default(uuid())
+  despesaId      String   @map("despesa_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento") // Pix, Boleto, Transferência, Cartão...
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  despesa Despesa @relation(fields: [despesaId], references: [id], onDelete: Cascade)
+
+  @@index([despesaId])
+  @@map("baixas_despesa")
+  @@schema("public")
 }
 
 // ===== Recebível avulso =====
@@ -556,6 +607,8 @@ model Recebivel {
   cnpj          String?
   descricao     String?
   valorCentavos Int       @map("valor_centavos")
+  // Total já recebido (cache — soma de "baixas"; permite recebimento parcial).
+  valorPagoCentavos Int   @default(0) @map("valor_pago_centavos")
   // Situação de recebimento.
   pago          Boolean   @default(false)
   dataPagamento DateTime? @map("data_pagamento")
@@ -566,14 +619,36 @@ model Recebivel {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  baixas BaixaRecebivel[]
+
   @@index([data])
   @@index([pago])
   @@map("recebiveis")
+  @@schema("public")
 }
 
-// ===== Lançamento financeiro pessoal =====
-// Controle Financeiro Pessoal (exclusivo do admin master). Totalmente separado
-// do financeiro da empresa. Lançamentos livres de receita/despesa por pessoa.
+// Cada recebimento (total ou parcial) registrado contra um Recebível avulso.
+model BaixaRecebivel {
+  id             String   @id @default(uuid())
+  recebivelId    String   @map("recebivel_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  recebivel Recebivel @relation(fields: [recebivelId], references: [id], onDelete: Cascade)
+
+  @@index([recebivelId])
+  @@map("baixas_recebivel")
+  @@schema("public")
+}
+
+// ===== Lançamento financeiro pessoal (legado) =====
+// Substituído por DespesaPessoal/RecebivelPessoal (schema "pessoal"). Mantido
+// só como rede de segurança até a migração de dados ser confirmada em
+// produção — não é mais escrito pelas telas novas. Remover numa migration
+// própria depois da validação.
 model LancamentoPessoal {
   id            String    @id @default(uuid())
   data          DateTime
@@ -595,4 +670,93 @@ model LancamentoPessoal {
   @@index([tipo])
   @@index([pessoa])
   @@map("lancamentos_pessoais")
+  @@schema("public")
+}
+
+// ===================== Controle Financeiro Pessoal =====================
+// Schema Postgres próprio ("pessoal") — fisicamente separado das tabelas da
+// empresa, exclusivo do admin master (paulodick). Mesmo formato de
+// Despesa/Recebivel (baixa parcial com histórico própio), só que por pessoa.
+
+model DespesaPessoal {
+  id                String      @id @default(uuid())
+  data              DateTime
+  // Pessoa a quem a despesa pertence (ex.: Paulo, Luisa).
+  pessoa            String
+  fornecedor        String
+  categoria         String?
+  descricao         String?
+  valorCentavos     Int         @map("valor_centavos")
+  valorPagoCentavos Int         @default(0) @map("valor_pago_centavos")
+  pago              Boolean     @default(false)
+  dataPagamento     DateTime?   @map("data_pagamento")
+  observacoes       String?
+  prioridade        Prioridade?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  baixas BaixaDespesaPessoal[]
+
+  @@index([data])
+  @@index([pago])
+  @@index([pessoa])
+  @@map("despesas_pessoais")
+  @@schema("pessoal")
+}
+
+model BaixaDespesaPessoal {
+  id             String   @id @default(uuid())
+  despesaId      String   @map("despesa_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  despesa DespesaPessoal @relation(fields: [despesaId], references: [id], onDelete: Cascade)
+
+  @@index([despesaId])
+  @@map("baixas_despesa_pessoal")
+  @@schema("pessoal")
+}
+
+model RecebivelPessoal {
+  id                String    @id @default(uuid())
+  data              DateTime
+  // Pessoa a quem o recebível pertence (ex.: Paulo, Luisa).
+  pessoa            String
+  origem            String
+  descricao         String?
+  valorCentavos     Int       @map("valor_centavos")
+  valorPagoCentavos Int       @default(0) @map("valor_pago_centavos")
+  pago              Boolean   @default(false)
+  dataPagamento     DateTime? @map("data_pagamento")
+  condicaoPagamento String?   @map("condicao_pagamento")
+  observacoes       String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  baixas BaixaRecebivelPessoal[]
+
+  @@index([data])
+  @@index([pago])
+  @@index([pessoa])
+  @@map("recebiveis_pessoais")
+  @@schema("pessoal")
+}
+
+model BaixaRecebivelPessoal {
+  id             String   @id @default(uuid())
+  recebivelId    String   @map("recebivel_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  recebivel RecebivelPessoal @relation(fields: [recebivelId], references: [id], onDelete: Cascade)
+
+  @@index([recebivelId])
+  @@map("baixas_recebivel_pessoal")
+  @@schema("pessoal")
 }

@@ -29,6 +29,8 @@ export class CreateRecebivelDto {
   // mutuamente exclusiva com dataPagamento na UI.
   @IsOptional() @IsString() @MaxLength(60) condicaoPagamento?: string;
   @IsOptional() @IsString() @MaxLength(400) observacoes?: string;
+  // Quanto já foi recebido (recebimento parcial). Saldo devedor = valor - valorPago.
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) valorPago?: number;
 }
 
 // Atualização parcial (PATCH): todos os campos são opcionais.
@@ -44,4 +46,5 @@ export class UpdateRecebivelDto {
   // "" para limpar o campo (o service converte para null).
   @IsOptional() @IsString() @MaxLength(60) condicaoPagamento?: string;
   @IsOptional() @IsString() @MaxLength(400) observacoes?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) valorPago?: number;
 }

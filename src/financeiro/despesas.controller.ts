@@ -23,16 +23,23 @@ import {
   CreateRecebivelDto,
   UpdateRecebivelDto,
 } from './dto/recebivel.dto';
+import { CreateBaixaDto } from './dto/baixa.dto';
 import {
-  CreateLancamentoPessoalDto,
-  UpdateLancamentoPessoalDto,
-} from './dto/lancamento-pessoal.dto';
+  CreateDespesaPessoalDto,
+  UpdateDespesaPessoalDto,
+} from './dto/despesa-pessoal.dto';
+import {
+  CreateRecebivelPessoalDto,
+  UpdateRecebivelPessoalDto,
+} from './dto/recebivel-pessoal.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 
-// Controle Financeiro — módulo de Despesas + Resumo (Dashboard/Fluxo de Caixa).
-// Todo o módulo é restrito ao admin (mesma regra do CRM/Financeiro).
+// Controle Financeiro — módulo de Despesas + Recebíveis + Resumo (Dashboard/
+// Fluxo de Caixa) + Controle Financeiro Pessoal. Todo o módulo é restrito ao
+// admin (mesma regra do CRM/Financeiro) — a exclusividade do Pessoal para o
+// usuário 'paulodick' é aplicada no front-end (navegação), não aqui.
 @UseGuards(JwtAuthGuard)
 @Controller('financeiro')
 export class DespesasController {
@@ -42,7 +49,8 @@ export class DespesasController {
     private pessoal: PessoalService,
   ) {}
 
-  // Resumo consolidado: KPIs + fluxo de caixa mensal + despesas por categoria.
+  // Resumo consolidado: KPIs + fluxo de caixa mensal + despesas por
+  // categoria + contas a pagar/receber + inadimplência + atividade recente.
   @Roles('admin')
   @Get('resumo')
   resumo() {
@@ -79,6 +87,28 @@ export class DespesasController {
   @Delete('despesas/:id')
   remove(@Param('id') id: string) {
     return this.despesas.remove(id);
+  }
+
+  // ===== Baixas (pagamento total ou parcial, com histórico) =====
+  @Roles('admin')
+  @Get('despesas/:id/baixas')
+  listarBaixasDespesa(@Param('id') id: string) {
+    return this.despesas.listarBaixas(id);
+  }
+
+  @Roles('admin')
+  @Post('despesas/:id/baixas')
+  registrarBaixaDespesa(@Param('id') id: string, @Body() dto: CreateBaixaDto) {
+    return this.despesas.registrarBaixa(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('despesas/:id/baixas/:baixaId')
+  removerBaixaDespesa(
+    @Param('id') id: string,
+    @Param('baixaId') baixaId: string,
+  ) {
+    return this.despesas.removerBaixa(id, baixaId);
   }
 
   // ===== Boleto (upload/download) =====
@@ -125,7 +155,28 @@ export class DespesasController {
     return this.recebiveis.remove(id);
   }
 
-  // ===== Controle Financeiro Pessoal (exclusivo admin master) =====
+  @Roles('admin')
+  @Get('recebiveis/:id/baixas')
+  listarBaixasRecebivel(@Param('id') id: string) {
+    return this.recebiveis.listarBaixas(id);
+  }
+
+  @Roles('admin')
+  @Post('recebiveis/:id/baixas')
+  registrarBaixaRecebivel(@Param('id') id: string, @Body() dto: CreateBaixaDto) {
+    return this.recebiveis.registrarBaixa(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('recebiveis/:id/baixas/:baixaId')
+  removerBaixaRecebivel(
+    @Param('id') id: string,
+    @Param('baixaId') baixaId: string,
+  ) {
+    return this.recebiveis.removerBaixa(id, baixaId);
+  }
+
+  // ===== Controle Financeiro Pessoal (exclusivo admin master no front-end) =====
   @Roles('admin')
   @Get('pessoal/resumo')
   resumoPessoal() {
@@ -133,29 +184,112 @@ export class DespesasController {
   }
 
   @Roles('admin')
-  @Get('pessoal')
-  listPessoal(@Query() q: PaginationDto) {
-    return this.pessoal.list(q);
+  @Get('pessoal/fluxo-caixa')
+  fluxoCaixaPessoal() {
+    return this.pessoal.fluxoCaixa();
+  }
+
+  // ----- Despesas pessoais -----
+  @Roles('admin')
+  @Get('pessoal/despesas')
+  listDespesasPessoal(@Query() q: PaginationDto) {
+    return this.pessoal.listDespesas(q);
   }
 
   @Roles('admin')
-  @Post('pessoal')
-  createPessoal(@Body() dto: CreateLancamentoPessoalDto) {
-    return this.pessoal.create(dto);
+  @Post('pessoal/despesas')
+  createDespesaPessoal(@Body() dto: CreateDespesaPessoalDto) {
+    return this.pessoal.createDespesa(dto);
   }
 
   @Roles('admin')
-  @Put('pessoal/:id')
-  updatePessoal(
+  @Put('pessoal/despesas/:id')
+  updateDespesaPessoal(
     @Param('id') id: string,
-    @Body() dto: UpdateLancamentoPessoalDto,
+    @Body() dto: UpdateDespesaPessoalDto,
   ) {
-    return this.pessoal.update(id, dto);
+    return this.pessoal.updateDespesa(id, dto);
   }
 
   @Roles('admin')
-  @Delete('pessoal/:id')
-  removePessoal(@Param('id') id: string) {
-    return this.pessoal.remove(id);
+  @Delete('pessoal/despesas/:id')
+  removeDespesaPessoal(@Param('id') id: string) {
+    return this.pessoal.removeDespesa(id);
+  }
+
+  @Roles('admin')
+  @Get('pessoal/despesas/:id/baixas')
+  listarBaixasDespesaPessoal(@Param('id') id: string) {
+    return this.pessoal.listarBaixasDespesa(id);
+  }
+
+  @Roles('admin')
+  @Post('pessoal/despesas/:id/baixas')
+  registrarBaixaDespesaPessoal(
+    @Param('id') id: string,
+    @Body() dto: CreateBaixaDto,
+  ) {
+    return this.pessoal.registrarBaixaDespesa(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('pessoal/despesas/:id/baixas/:baixaId')
+  removerBaixaDespesaPessoal(
+    @Param('id') id: string,
+    @Param('baixaId') baixaId: string,
+  ) {
+    return this.pessoal.removerBaixaDespesa(id, baixaId);
+  }
+
+  // ----- Recebíveis pessoais -----
+  @Roles('admin')
+  @Get('pessoal/recebiveis')
+  listRecebiveisPessoal(@Query() q: PaginationDto) {
+    return this.pessoal.listRecebiveis(q);
+  }
+
+  @Roles('admin')
+  @Post('pessoal/recebiveis')
+  createRecebivelPessoal(@Body() dto: CreateRecebivelPessoalDto) {
+    return this.pessoal.createRecebivel(dto);
+  }
+
+  @Roles('admin')
+  @Put('pessoal/recebiveis/:id')
+  updateRecebivelPessoal(
+    @Param('id') id: string,
+    @Body() dto: UpdateRecebivelPessoalDto,
+  ) {
+    return this.pessoal.updateRecebivel(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('pessoal/recebiveis/:id')
+  removeRecebivelPessoal(@Param('id') id: string) {
+    return this.pessoal.removeRecebivel(id);
+  }
+
+  @Roles('admin')
+  @Get('pessoal/recebiveis/:id/baixas')
+  listarBaixasRecebivelPessoal(@Param('id') id: string) {
+    return this.pessoal.listarBaixasRecebivel(id);
+  }
+
+  @Roles('admin')
+  @Post('pessoal/recebiveis/:id/baixas')
+  registrarBaixaRecebivelPessoal(
+    @Param('id') id: string,
+    @Body() dto: CreateBaixaDto,
+  ) {
+    return this.pessoal.registrarBaixaRecebivel(id, dto);
+  }
+
+  @Roles('admin')
+  @Delete('pessoal/recebiveis/:id/baixas/:baixaId')
+  removerBaixaRecebivelPessoal(
+    @Param('id') id: string,
+    @Param('baixaId') baixaId: string,
+  ) {
+    return this.pessoal.removerBaixaRecebivel(id, baixaId);
   }
 }

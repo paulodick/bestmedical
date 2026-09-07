@@ -6,6 +6,7 @@ import {
   UploadBoletoDespesaDto,
   PrioridadeDespesa,
 } from './dto/despesa.dto';
+import { CreateBaixaDto } from './dto/baixa.dto';
 import { PaginationDto, Paginated } from '../common/dto/pagination.dto';
 import {
   reaisParaCentavos,
@@ -32,6 +33,14 @@ export interface DespesaApi {
   boletoEm: string | null;
 }
 
+export interface BaixaApi {
+  id: string;
+  data: string;
+  valor: number;
+  formaPagamento: string;
+  observacao: string | null;
+}
+
 // Um lançamento individual de fluxo de caixa (entrada ou saída já realizada).
 export interface FluxoCaixaLancamento {
   id: string;
@@ -52,6 +61,10 @@ function isoParaData(iso: string): Date {
 function dataParaIso(d: Date | null): string | null {
   if (!d) return null;
   return d.toISOString().slice(0, 10);
+}
+
+function hojeIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 @Injectable()
@@ -90,6 +103,22 @@ export class DespesasService {
       prioridade: (d.prioridade as PrioridadeDespesa) ?? null,
       boletoNome: d.boletoNome,
       boletoEm: dataParaIso(d.boletoEm),
+    };
+  }
+
+  private toBaixaApi(b: {
+    id: string;
+    data: Date;
+    valorCentavos: number;
+    formaPagamento: string;
+    observacao: string | null;
+  }): BaixaApi {
+    return {
+      id: b.id,
+      data: dataParaIso(b.data) as string,
+      valor: centavosParaReais(b.valorCentavos),
+      formaPagamento: b.formaPagamento,
+      observacao: b.observacao,
     };
   }
 
@@ -216,6 +245,83 @@ export class DespesasService {
     return d;
   }
 
+  // ===== Baixas (pagamento total ou parcial, com histórico) =====
+  async listarBaixas(despesaId: string): Promise<BaixaApi[]> {
+    await this.ensure(despesaId);
+    const baixas = await this.prisma.baixaDespesa.findMany({
+      where: { despesaId },
+      orderBy: { data: 'asc' },
+    });
+    return baixas.map((b) => this.toBaixaApi(b));
+  }
+
+  async registrarBaixa(
+    despesaId: string,
+    dto: CreateBaixaDto,
+  ): Promise<DespesaApi> {
+    const despesa = await this.ensure(despesaId);
+    const valorCentavos = reaisParaCentavos(dto.valor);
+
+    const atualizada = await this.prisma.$transaction(async (tx) => {
+      await tx.baixaDespesa.create({
+        data: {
+          despesaId,
+          data: isoParaData(dto.data),
+          valorCentavos,
+          formaPagamento: dto.formaPagamento,
+          observacao: dto.observacao ?? null,
+        },
+      });
+      const agg = await tx.baixaDespesa.aggregate({
+        where: { despesaId },
+        _sum: { valorCentavos: true },
+      });
+      const totalPago = agg._sum.valorCentavos ?? 0;
+      const quitada = totalPago >= despesa.valorCentavos;
+      return tx.despesa.update({
+        where: { id: despesaId },
+        data: {
+          valorPagoCentavos: totalPago,
+          pago: quitada,
+          dataPagamento: quitada
+            ? (despesa.dataPagamento ?? isoParaData(dto.data))
+            : despesa.dataPagamento,
+        },
+      });
+    });
+
+    return this.toApi(atualizada);
+  }
+
+  async removerBaixa(despesaId: string, baixaId: string): Promise<DespesaApi> {
+    await this.ensure(despesaId);
+    const baixa = await this.prisma.baixaDespesa.findUnique({
+      where: { id: baixaId },
+    });
+    if (!baixa || baixa.despesaId !== despesaId) {
+      throw new NotFoundException('Baixa não encontrada para esta despesa.');
+    }
+
+    const atualizada = await this.prisma.$transaction(async (tx) => {
+      await tx.baixaDespesa.delete({ where: { id: baixaId } });
+      const agg = await tx.baixaDespesa.aggregate({
+        where: { despesaId },
+        _sum: { valorCentavos: true },
+      });
+      const totalPago = agg._sum.valorCentavos ?? 0;
+      const d = await tx.despesa.findUniqueOrThrow({ where: { id: despesaId } });
+      return tx.despesa.update({
+        where: { id: despesaId },
+        data: {
+          valorPagoCentavos: totalPago,
+          pago: totalPago >= d.valorCentavos && totalPago > 0,
+        },
+      });
+    });
+
+    return this.toApi(atualizada);
+  }
+
   // ===== Fluxo de Caixa (planilha) =====
   // Lista TODOS os lançamentos individuais já realizados (dinheiro que
   // efetivamente entrou ou saiu) — uma linha por transação, não agregado
@@ -227,77 +333,63 @@ export class DespesasService {
   // parcela/mensalidade paga entra como seu próprio lançamento, na data em
   // que foi de fato paga (pagoEm) — essencial agora que orçamentos
   // parcelados e contratos com mensalidades (ParcelaContrato) podem ter
-  // algumas parcelas pagas e outras não.
+  // algumas parcelas pagas e outras não. Despesas e recebíveis avulsos
+  // entram uma linha por BAIXA (permite pagamento parcial datado).
   async fluxoCaixa(): Promise<FluxoCaixaLancamento[]> {
-    const [orcamentos, propostas, recebiveis, despesas] = await Promise.all([
-      this.prisma.orcamento.findMany({
-        where: { statusCancelado: false },
-        select: {
-          numero: true,
-          data: true,
-          clienteNomeSnap: true,
-          totalCentavos: true,
-          totalManualCentavos: true,
-          statusPago: true,
-          dataPagamento: true,
-          parcelas: {
-            select: {
-              numero: true,
-              valorCentavos: true,
-              pago: true,
-              pagoEm: true,
-              dataVencimento: true,
+    const [orcamentos, propostas, baixasRecebivel, baixasDespesa] =
+      await Promise.all([
+        this.prisma.orcamento.findMany({
+          where: { statusCancelado: false },
+          select: {
+            numero: true,
+            data: true,
+            clienteNomeSnap: true,
+            totalCentavos: true,
+            totalManualCentavos: true,
+            statusPago: true,
+            dataPagamento: true,
+            parcelas: {
+              select: {
+                numero: true,
+                valorCentavos: true,
+                pago: true,
+                pagoEm: true,
+                dataVencimento: true,
+              },
             },
           },
-        },
-      }),
-      this.prisma.proposta.findMany({
-        where: { statusCancelado: false },
-        select: {
-          numero: true,
-          data: true,
-          clienteNomeSnap: true,
-          tipoContrato: true,
-          totalCentavos: true,
-          totalManualCentavos: true,
-          statusPago: true,
-          dataPagamento: true,
-          parcelasContrato: {
-            select: {
-              numero: true,
-              valorCentavos: true,
-              pago: true,
-              pagoEm: true,
-              dataVencimento: true,
+        }),
+        this.prisma.proposta.findMany({
+          where: { statusCancelado: false },
+          select: {
+            numero: true,
+            data: true,
+            clienteNomeSnap: true,
+            tipoContrato: true,
+            totalCentavos: true,
+            totalManualCentavos: true,
+            statusPago: true,
+            dataPagamento: true,
+            parcelasContrato: {
+              select: {
+                numero: true,
+                valorCentavos: true,
+                pago: true,
+                pagoEm: true,
+                dataVencimento: true,
+              },
             },
           },
-        },
-      }),
-      this.prisma.recebivel.findMany({
-        where: { pago: true },
-        select: {
-          id: true,
-          data: true,
-          empresa: true,
-          descricao: true,
-          valorCentavos: true,
-          dataPagamento: true,
-        },
-      }),
-      this.prisma.despesa.findMany({
-        select: {
-          id: true,
-          data: true,
-          fornecedor: true,
-          categoria: true,
-          descricao: true,
-          valorCentavos: true,
-          valorPagoCentavos: true,
-          pago: true,
-          dataPagamento: true,
-        },
-      }),
-    ]);
+        }),
+        this.prisma.baixaRecebivel.findMany({
+          include: { recebivel: { select: { empresa: true, descricao: true } } },
+        }),
+        this.prisma.baixaDespesa.findMany({
+          include: {
+            despesa: { select: { fornecedor: true, categoria: true, descricao: true } },
+          },
+        }),
+      ]);
 
     const totalEfetivo = (r: {
       totalCentavos: number;
@@ -362,34 +454,29 @@ export class DespesasService {
       }
     }
 
-    // ----- Entradas: Recebíveis avulsos -----
-    for (const r of recebiveis) {
+    // ----- Entradas: Recebíveis avulsos (uma linha por baixa registrada) -----
+    for (const b of baixasRecebivel) {
       lancamentos.push({
-        id: `rec-${r.id}`,
-        data: dataParaIso(r.dataPagamento ?? r.data) as string,
+        id: `rec-baixa-${b.id}`,
+        data: dataParaIso(b.data) as string,
         tipo: 'entrada',
-        origem: r.empresa || '—',
-        descricao: r.descricao || 'Recebível avulso',
+        origem: b.recebivel.empresa || '—',
+        descricao: b.recebivel.descricao || 'Recebível avulso',
         categoria: 'Avulso',
-        valor: centavosParaReais(r.valorCentavos),
+        valor: centavosParaReais(b.valorCentavos),
       });
     }
 
-    // ----- Saídas: Despesas -----
-    // pago=true conta o valor cheio (assume-se quitada); senão, só o que já
-    // foi efetivamente pago (valorPagoCentavos), para refletir pagamentos
-    // parciais sem contar o saldo devedor como dinheiro que já saiu.
-    for (const d of despesas) {
-      const centavosPagos = d.pago ? d.valorCentavos : d.valorPagoCentavos;
-      if (centavosPagos <= 0) continue;
+    // ----- Saídas: Despesas (uma linha por baixa registrada) -----
+    for (const b of baixasDespesa) {
       lancamentos.push({
-        id: `desp-${d.id}`,
-        data: dataParaIso(d.dataPagamento ?? d.data) as string,
+        id: `desp-baixa-${b.id}`,
+        data: dataParaIso(b.data) as string,
         tipo: 'saida',
-        origem: d.fornecedor,
-        descricao: d.descricao || d.fornecedor,
-        categoria: d.categoria || 'Sem categoria',
-        valor: centavosParaReais(centavosPagos),
+        origem: b.despesa.fornecedor,
+        descricao: b.despesa.descricao || b.despesa.fornecedor,
+        categoria: b.despesa.categoria || 'Sem categoria',
+        valor: centavosParaReais(b.valorCentavos),
       });
     }
 
@@ -397,50 +484,66 @@ export class DespesasService {
   }
 
   // ===== Resumo financeiro (Dashboard + Fluxo de Caixa) =====
-  // Cruza as saídas (Despesas) com as entradas (orçamentos/propostas pagos)
-  // e devolve KPIs consolidados + série mensal para o gráfico de fluxo.
+  // Cruza as saídas (Despesas) com as entradas (orçamentos/propostas pagos e
+  // recebíveis avulsos) e devolve KPIs consolidados + série mensal + contas
+  // a pagar/receber + inadimplência + atividade recente.
   async resumo() {
-    const [despesas, orcamentos, propostas] = await Promise.all([
-      this.prisma.despesa.findMany({
-        select: {
-          data: true,
-          dataPagamento: true,
-          valorCentavos: true,
-          pago: true,
-          categoria: true,
-        },
-      }),
-      this.prisma.orcamento.findMany({
-        select: {
-          totalCentavos: true,
-          totalManualCentavos: true,
-          statusPago: true,
-          statusCancelado: true,
-          dataPagamento: true,
-          createdAt: true,
-        },
-      }),
-      this.prisma.proposta.findMany({
-        select: {
-          totalCentavos: true,
-          totalManualCentavos: true,
-          statusPago: true,
-          statusCancelado: true,
-          dataPagamento: true,
-          createdAt: true,
-        },
-      }),
-    ]);
-
-    // ----- Totais de saída (despesas) -----
-    const despesaTotalCent = despesas.reduce(
-      (s, d) => s + d.valorCentavos,
-      0,
-    );
-    const despesaPagaCent = despesas
-      .filter((d) => d.pago)
-      .reduce((s, d) => s + d.valorCentavos, 0);
-    const despesaPendenteCent = despesaTotalCent - despesaPagaCent;
+    const hoje = hojeIso();
+    const [despesas, orcamentos, propostas, recebiveis, baixasDespesa, baixasRecebivel] =
+      await Promise.all([
+        this.prisma.despesa.findMany({
+          select: {
+            id: true,
+            data: true,
+            fornecedor: true,
+            dataPagamento: true,
+            valorCentavos: true,
+            valorPagoCentavos: true,
+            pago: true,
+            categoria: true,
+          },
+        }),
+        this.prisma.orcamento.findMany({
+          select: {
+            numero: true,
+            clienteNomeSnap: true,
+            totalCentavos: true,
+            totalManualCentavos: true,
+            statusPago: true,
+            statusCancelado: true,
+            dataPagamento: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.proposta.findMany({
+          select: {
+            numero: true,
+            clienteNomeSnap: true,
+            totalCentavos: true,
+            totalManualCentavos: true,
+            statusPago: true,
+            statusCancelado: true,
+            dataPagamento: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.recebivel.findMany({
+          select: {
+            id: true,
+            empresa: true,
+            dataPagamento: true,
+            valorCentavos: true,
+            valorPagoCentavos: true,
+            pago: true,
+          },
+        }),
+        this.prisma.baixaDespesa.findMany({
+          select: { data: true, valorCentavos: true },
+        }),
+        this.prisma.baixaRecebivel.findMany({
+          select: { data: true, valorCentavos: true },
+        }),
+      ]);
 
     // Total efetivo = total manual quando informado, senão o total calculado.
     const totalEfetivo = (r: {
@@ -448,23 +551,38 @@ export class DespesasService {
       totalManualCentavos: number | null;
     }) => r.totalManualCentavos ?? r.totalCentavos ?? 0;
 
-    // ----- Totais de entrada (recebíveis pagos) -----
+    // ----- Totais de saída (despesas) — conta pagamento parcial já feito -----
+    const despesaTotalCent = despesas.reduce((s, d) => s + d.valorCentavos, 0);
+    const despesaPagaCent = despesas.reduce(
+      (s, d) => s + (d.pago ? d.valorCentavos : d.valorPagoCentavos),
+      0,
+    );
+    const despesaPendenteCent = despesaTotalCent - despesaPagaCent;
+
+    // ----- Totais de entrada: orçamentos + propostas (documento inteiro) + recebíveis avulsos (parcial) -----
     const orcRecebidoCent = orcamentos
       .filter((o) => o.statusPago && !o.statusCancelado)
       .reduce((s, o) => s + totalEfetivo(o), 0);
     const propRecebidoCent = propostas
       .filter((p) => p.statusPago && !p.statusCancelado)
       .reduce((s, p) => s + totalEfetivo(p), 0);
-    const receitaRecebidaCent = orcRecebidoCent + propRecebidoCent;
+    const recRecebidoCent = recebiveis.reduce(
+      (s, r) => s + (r.pago ? r.valorCentavos : r.valorPagoCentavos),
+      0,
+    );
+    const receitaRecebidaCent = orcRecebidoCent + propRecebidoCent + recRecebidoCent;
 
-    // ----- Recebíveis em aberto (não pagos, não cancelados) -----
     const orcAbertoCent = orcamentos
       .filter((o) => !o.statusPago && !o.statusCancelado)
       .reduce((s, o) => s + totalEfetivo(o), 0);
     const propAbertoCent = propostas
       .filter((p) => !p.statusPago && !p.statusCancelado)
       .reduce((s, p) => s + totalEfetivo(p), 0);
-    const receitaAbertaCent = orcAbertoCent + propAbertoCent;
+    const recAbertoCent = recebiveis.reduce(
+      (s, r) => s + (r.valorCentavos - (r.pago ? r.valorCentavos : r.valorPagoCentavos)),
+      0,
+    );
+    const receitaAbertaCent = orcAbertoCent + propAbertoCent + recAbertoCent;
 
     // ----- Série mensal (Fluxo de Caixa): últimos 12 meses -----
     const meses: string[] = [];
@@ -480,8 +598,6 @@ export class DespesasService {
       d ? d.toISOString().slice(0, 7) : null;
 
     const fluxo = meses.map((mes) => {
-      // Entradas: recebíveis pagos com dataPagamento naquele mês (ou createdAt
-      // como fallback quando não há data de pagamento registrada).
       const entradaOrc = orcamentos
         .filter(
           (o) =>
@@ -498,22 +614,31 @@ export class DespesasService {
             (chaveMes(p.dataPagamento) ?? chaveMes(p.createdAt)) === mes,
         )
         .reduce((s, p) => s + totalEfetivo(p), 0);
+      // Recebíveis avulsos e despesas usam a data de cada BAIXA (permite
+      // pagamento parcial datado, em vez de um único "dataPagamento").
+      const entradaRec = baixasRecebivel
+        .filter((b) => chaveMes(b.data) === mes)
+        .reduce((s, b) => s + b.valorCentavos, 0);
+      const saida = baixasDespesa
+        .filter((b) => chaveMes(b.data) === mes)
+        .reduce((s, b) => s + b.valorCentavos, 0);
 
-      // Saídas: despesas pagas com dataPagamento no mês (fallback: data).
-      const saida = despesas
-        .filter(
-          (d) =>
-            d.pago && (chaveMes(d.dataPagamento) ?? chaveMes(d.data)) === mes,
-        )
-        .reduce((s, d) => s + d.valorCentavos, 0);
-
-      const entradaCent = entradaOrc + entradaProp;
+      const entradaCent = entradaOrc + entradaProp + entradaRec;
       return {
         mes,
         entrada: centavosParaReais(entradaCent),
         saida: centavosParaReais(saida),
         saldo: centavosParaReais(entradaCent - saida),
       };
+    });
+
+    // Saldo acumulado: soma corrida do saldo mensal (não é saldo bancário
+    // real — o sistema não tem conceito de conta/saldo inicial — é apenas o
+    // acumulado de entradas menos saídas desde o início dos 12 meses acima).
+    let acumulado = 0;
+    const saldoAcumulado = fluxo.map((f) => {
+      acumulado += f.saldo;
+      return { mes: f.mes, saldo: Number(acumulado.toFixed(2)) };
     });
 
     // ----- Despesas por categoria (para o Dashboard) -----
@@ -529,6 +654,115 @@ export class DespesasService {
       }))
       .sort((a, b) => b.valor - a.valor);
 
+    // ----- Contas a Pagar (snapshot para o Dashboard) -----
+    const despesaAtrasadaCent = despesas
+      .filter((d) => !d.pago && dataParaIso(d.dataPagamento ?? d.data)! < hoje)
+      .reduce((s, d) => s + (d.valorCentavos - d.valorPagoCentavos), 0);
+    const contasAPagar = {
+      total: centavosParaReais(despesaTotalCent),
+      aPagar: centavosParaReais(despesaPendenteCent),
+      atrasado: centavosParaReais(despesaAtrasadaCent),
+    };
+    const proximosVencimentos = despesas
+      .filter((d) => !d.pago)
+      .map((d) => ({
+        nome: d.fornecedor,
+        valor: centavosParaReais(d.valorCentavos - d.valorPagoCentavos),
+        data: dataParaIso(d.dataPagamento ?? d.data) as string,
+      }))
+      .sort((a, b) => a.data.localeCompare(b.data))
+      .slice(0, 5);
+
+    // ----- Contas a Receber + inadimplência por prazo (aging) -----
+    type Aberto = { nome: string; valor: number; vencimento: string | null };
+    const abertosOrc: Aberto[] = orcamentos
+      .filter((o) => !o.statusPago && !o.statusCancelado)
+      .map((o) => ({
+        nome: o.clienteNomeSnap || o.numero,
+        valor: totalEfetivo(o),
+        vencimento: dataParaIso(o.dataPagamento),
+      }));
+    const abertosProp: Aberto[] = propostas
+      .filter((p) => !p.statusPago && !p.statusCancelado)
+      .map((p) => ({
+        nome: p.clienteNomeSnap || p.numero,
+        valor: totalEfetivo(p),
+        vencimento: dataParaIso(p.dataPagamento),
+      }));
+    const abertosRec: Aberto[] = recebiveis
+      .filter((r) => !r.pago || r.valorPagoCentavos < r.valorCentavos)
+      .map((r) => ({
+        nome: r.empresa,
+        valor: r.valorCentavos - r.valorPagoCentavos,
+        vencimento: dataParaIso(r.dataPagamento),
+      }));
+    const todosAbertos = [...abertosOrc, ...abertosProp, ...abertosRec];
+
+    const diasAtraso = (vencimento: string | null): number => {
+      if (!vencimento) return -1; // sem data prevista: não entra na inadimplência
+      const ms = new Date(hoje).getTime() - new Date(vencimento).getTime();
+      return Math.floor(ms / 86_400_000);
+    };
+
+    const buckets = { emDia: 0, ate15: 0, ate30: 0, mais30: 0 };
+    for (const a of todosAbertos) {
+      const dias = diasAtraso(a.vencimento);
+      if (dias < 0) buckets.emDia += a.valor;
+      else if (dias <= 15) buckets.ate15 += a.valor;
+      else if (dias <= 30) buckets.ate30 += a.valor;
+      else buckets.mais30 += a.valor;
+    }
+    const agingRecebiveis = {
+      emDia: centavosParaReais(buckets.emDia),
+      ate15Dias: centavosParaReais(buckets.ate15),
+      ate30Dias: centavosParaReais(buckets.ate30),
+      mais30Dias: centavosParaReais(buckets.mais30),
+    };
+    const maioresAtrasos = todosAbertos
+      .map((a) => ({ ...a, dias: diasAtraso(a.vencimento) }))
+      .filter((a) => a.dias > 0)
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 5)
+      .map((a) => ({ nome: a.nome, valor: centavosParaReais(a.valor), dias: a.dias }));
+
+    const contasAReceber = {
+      total: centavosParaReais(receitaRecebidaCent + receitaAbertaCent),
+      aReceber: centavosParaReais(receitaAbertaCent),
+      atrasado: centavosParaReais(buckets.ate15 + buckets.ate30 + buckets.mais30),
+    };
+
+    // ----- Atividade recente: últimas baixas (despesa + recebível) -----
+    const [ultimasBaixasDespesa, ultimasBaixasRecebivel] = await Promise.all([
+      this.prisma.baixaDespesa.findMany({
+        orderBy: { data: 'desc' },
+        take: 8,
+        include: { despesa: { select: { fornecedor: true } } },
+      }),
+      this.prisma.baixaRecebivel.findMany({
+        orderBy: { data: 'desc' },
+        take: 8,
+        include: { recebivel: { select: { empresa: true } } },
+      }),
+    ]);
+    const atividadeRecente = [
+      ...ultimasBaixasDespesa.map((b) => ({
+        tipo: 'saida' as const,
+        nome: b.despesa.fornecedor,
+        valor: centavosParaReais(b.valorCentavos),
+        data: dataParaIso(b.data) as string,
+        formaPagamento: b.formaPagamento,
+      })),
+      ...ultimasBaixasRecebivel.map((b) => ({
+        tipo: 'entrada' as const,
+        nome: b.recebivel.empresa,
+        valor: centavosParaReais(b.valorCentavos),
+        data: dataParaIso(b.data) as string,
+        formaPagamento: b.formaPagamento,
+      })),
+    ]
+      .sort((a, b) => b.data.localeCompare(a.data))
+      .slice(0, 8);
+
     return {
       kpis: {
         receitaRecebida: centavosParaReais(receitaRecebidaCent),
@@ -540,7 +774,14 @@ export class DespesasService {
         resultado: centavosParaReais(receitaRecebidaCent - despesaPagaCent),
       },
       fluxo,
+      saldoAcumulado,
       despesasPorCategoria,
+      contasAPagar,
+      contasAReceber,
+      agingRecebiveis,
+      proximosVencimentos,
+      maioresAtrasos,
+      atividadeRecente,
     };
   }
 }
