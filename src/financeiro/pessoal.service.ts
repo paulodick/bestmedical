@@ -489,9 +489,12 @@ export class PessoalService {
 
   // ===================== Fluxo de Caixa (pessoal) =====================
   // Mesma ideia do fluxoCaixa() da empresa, mas só com Despesa/Recebível
-  // pessoais (sem orçamento/proposta) — uma linha por baixa registrada.
+  // pessoais (sem orçamento/proposta). Parte já recebida: uma linha por
+  // baixa registrada (data real). Saldo ainda não recebido de cada
+  // recebível: uma linha prevista, na data de pagamento estimada (mesma
+  // exibida na página Recebíveis Pessoais) — permite prever o caixa do mês.
   async fluxoCaixa(): Promise<FluxoCaixaLancamento[]> {
-    const [baixasDespesa, baixasRecebivel] = await Promise.all([
+    const [baixasDespesa, baixasRecebivel, recebiveis] = await Promise.all([
       this.prisma.baixaDespesaPessoal.findMany({
         include: {
           despesa: { select: { fornecedor: true, categoria: true, descricao: true, pessoa: true } },
@@ -499,6 +502,18 @@ export class PessoalService {
       }),
       this.prisma.baixaRecebivelPessoal.findMany({
         include: { recebivel: { select: { origem: true, descricao: true, pessoa: true } } },
+      }),
+      this.prisma.recebivelPessoal.findMany({
+        select: {
+          id: true,
+          data: true,
+          origem: true,
+          descricao: true,
+          pessoa: true,
+          valorCentavos: true,
+          valorPagoCentavos: true,
+          dataPagamento: true,
+        },
       }),
     ]);
 
@@ -512,6 +527,18 @@ export class PessoalService {
         categoria: 'Pessoal',
         valor: centavosParaReais(b.valorCentavos),
       })),
+      ...recebiveis
+        .filter((r) => r.valorCentavos - r.valorPagoCentavos > 0)
+        .map((r) => ({
+          id: `recp-previsto-${r.id}`,
+          data: dataParaIso(r.dataPagamento ?? r.data) as string,
+          tipo: 'entrada' as const,
+          origem: `${r.origem} (${r.pessoa})`,
+          descricao: r.descricao || r.origem,
+          categoria: 'Pessoal',
+          valor: centavosParaReais(r.valorCentavos - r.valorPagoCentavos),
+          previsto: true,
+        })),
       ...baixasDespesa.map((b) => ({
         id: `despp-baixa-${b.id}`,
         data: dataParaIso(b.data) as string,

@@ -41,7 +41,12 @@ export interface BaixaApi {
   observacao: string | null;
 }
 
-// Um lançamento individual de fluxo de caixa (entrada ou saída já realizada).
+// Um lançamento individual de fluxo de caixa. `data` é sempre a data de
+// pagamento estimada/prevista (mesma exibida na página Recebíveis) — não a
+// data em que alguém marcou o item como pago no sistema. `previsto: true`
+// significa que o item ainda não foi realizado (serve para prever o caixa
+// do mês); `previsto: false`/ausente significa que já foi de fato recebido
+// ou pago.
 export interface FluxoCaixaLancamento {
   id: string;
   data: string;
@@ -50,6 +55,7 @@ export interface FluxoCaixaLancamento {
   descricao: string;
   categoria: string;
   valor: number;
+  previsto?: boolean;
 }
 
 // Converte 'yyyy-mm-dd' para Date à meia-noite UTC (evita deslocamento de fuso).
@@ -323,23 +329,31 @@ export class DespesasService {
   }
 
   // ===== Fluxo de Caixa (planilha) =====
-  // Lista TODOS os lançamentos individuais já realizados (dinheiro que
-  // efetivamente entrou ou saiu) — uma linha por transação, não agregado
-  // por período. O agrupamento/filtro por dia, semana, mês ou ano é feito
-  // no frontend a partir dessa lista completa.
+  // Lista TODOS os lançamentos individuais (realizados + previstos) — uma
+  // linha por transação, não agregado por período. O agrupamento/filtro por
+  // semana, mês ou ano é feito no frontend a partir dessa lista completa.
   //
   // Diferente de resumo() (que trata cada Orçamento/Proposta como um único
   // valor, usando só o status_pago do documento inteiro), aqui cada
-  // parcela/mensalidade paga entra como seu próprio lançamento, na data em
-  // que foi de fato paga (pagoEm) — essencial agora que orçamentos
-  // parcelados e contratos com mensalidades (ParcelaContrato) podem ter
-  // algumas parcelas pagas e outras não. Despesas e recebíveis avulsos
-  // entram uma linha por BAIXA (permite pagamento parcial datado).
+  // parcela/mensalidade entra como seu próprio lançamento — essencial agora
+  // que orçamentos parcelados e contratos com mensalidades (ParcelaContrato)
+  // podem ter algumas parcelas pagas e outras não.
+  //
+  // A data de cada lançamento de entrada (orçamento/proposta/recebível) é
+  // sempre a data de pagamento ESTIMADA/prevista (dataVencimento da parcela,
+  // ou dataPagamento do documento) — a mesma exibida na página Recebíveis —
+  // nunca a data em que alguém marcou como pago no sistema. Isso mantém as
+  // duas páginas consistentes e permite prever o caixa do mês mesmo para
+  // itens ainda não recebidos (marcados com `previsto: true`).
+  //
+  // Despesas e a parte já recebida de recebíveis avulsos entram uma linha
+  // por BAIXA (data real, permite pagamento parcial datado); o saldo ainda
+  // não recebido de cada recebível avulso entra como uma linha prevista.
   async fluxoCaixa(): Promise<FluxoCaixaLancamento[]> {
-    const [orcamentos, propostas, baixasRecebivel, baixasDespesa] =
+    const [orcamentos, propostas, recebiveis, baixasRecebivel, baixasDespesa] =
       await Promise.all([
         this.prisma.orcamento.findMany({
-          where: { statusCancelado: false },
+          where: { statusCancelado: false, statusAprovado: true },
           select: {
             numero: true,
             data: true,
@@ -353,14 +367,13 @@ export class DespesasService {
                 numero: true,
                 valorCentavos: true,
                 pago: true,
-                pagoEm: true,
                 dataVencimento: true,
               },
             },
           },
         }),
         this.prisma.proposta.findMany({
-          where: { statusCancelado: false },
+          where: { statusCancelado: false, statusAssinado: true },
           select: {
             numero: true,
             data: true,
@@ -375,10 +388,20 @@ export class DespesasService {
                 numero: true,
                 valorCentavos: true,
                 pago: true,
-                pagoEm: true,
                 dataVencimento: true,
               },
             },
+          },
+        }),
+        this.prisma.recebivel.findMany({
+          select: {
+            id: true,
+            data: true,
+            empresa: true,
+            descricao: true,
+            valorCentavos: true,
+            valorPagoCentavos: true,
+            dataPagamento: true,
           },
         }),
         this.prisma.baixaRecebivel.findMany({
@@ -399,21 +422,26 @@ export class DespesasService {
     const lancamentos: FluxoCaixaLancamento[] = [];
 
     // ----- Entradas: Orçamentos -----
+    // A data usada é sempre a data de pagamento ESTIMADA (dataVencimento da
+    // parcela, ou dataPagamento do orçamento) — a mesma exibida na página
+    // Recebíveis — nunca a data em que alguém marcou como pago no sistema.
+    // Itens ainda não pagos entram como `previsto: true`, permitindo prever
+    // o caixa do mês (não só ver o que já foi realizado).
     for (const o of orcamentos) {
       if (o.parcelas.length > 0) {
         for (const p of o.parcelas) {
-          if (!p.pago) continue;
           lancamentos.push({
             id: `orc-${o.numero}-p${p.numero}`,
-            data: dataParaIso(p.pagoEm ?? p.dataVencimento ?? o.data) as string,
+            data: dataParaIso(p.dataVencimento ?? o.data) as string,
             tipo: 'entrada',
             origem: o.clienteNomeSnap || '—',
             descricao: `${o.numero} · parcela ${p.numero}/${o.parcelas.length}`,
             categoria: 'Orçamento',
             valor: centavosParaReais(p.valorCentavos),
+            previsto: !p.pago,
           });
         }
-      } else if (o.statusPago) {
+      } else {
         lancamentos.push({
           id: `orc-${o.numero}`,
           data: dataParaIso(o.dataPagamento ?? o.data) as string,
@@ -422,6 +450,7 @@ export class DespesasService {
           descricao: o.numero,
           categoria: 'Orçamento',
           valor: centavosParaReais(totalEfetivo(o)),
+          previsto: !o.statusPago,
         });
       }
     }
@@ -430,18 +459,18 @@ export class DespesasService {
     for (const p of propostas) {
       if (p.parcelasContrato.length > 0) {
         for (const pc of p.parcelasContrato) {
-          if (!pc.pago) continue;
           lancamentos.push({
             id: `prop-${p.numero}-p${pc.numero}`,
-            data: dataParaIso(pc.pagoEm ?? pc.dataVencimento ?? p.data) as string,
+            data: dataParaIso(pc.dataVencimento ?? p.data) as string,
             tipo: 'entrada',
             origem: p.clienteNomeSnap || '—',
             descricao: `${p.numero} · mensalidade ${pc.numero}/${p.parcelasContrato.length}`,
             categoria: p.tipoContrato || 'Contrato',
             valor: centavosParaReais(pc.valorCentavos),
+            previsto: !pc.pago,
           });
         }
-      } else if (p.statusPago) {
+      } else {
         lancamentos.push({
           id: `prop-${p.numero}`,
           data: dataParaIso(p.dataPagamento ?? p.data) as string,
@@ -450,11 +479,13 @@ export class DespesasService {
           descricao: p.numero,
           categoria: p.tipoContrato || 'Contrato',
           valor: centavosParaReais(totalEfetivo(p)),
+          previsto: !p.statusPago,
         });
       }
     }
 
-    // ----- Entradas: Recebíveis avulsos (uma linha por baixa registrada) -----
+    // ----- Entradas: Recebíveis avulsos -----
+    // Parte já recebida: uma linha por baixa registrada (data real da baixa).
     for (const b of baixasRecebivel) {
       lancamentos.push({
         id: `rec-baixa-${b.id}`,
@@ -464,6 +495,22 @@ export class DespesasService {
         descricao: b.recebivel.descricao || 'Recebível avulso',
         categoria: 'Avulso',
         valor: centavosParaReais(b.valorCentavos),
+      });
+    }
+    // Saldo ainda não recebido: uma linha prevista, na data de pagamento
+    // estimada do recebível (mesma da página Recebíveis).
+    for (const r of recebiveis) {
+      const saldoDevedor = r.valorCentavos - r.valorPagoCentavos;
+      if (saldoDevedor <= 0) continue;
+      lancamentos.push({
+        id: `rec-previsto-${r.id}`,
+        data: dataParaIso(r.dataPagamento ?? r.data) as string,
+        tipo: 'entrada',
+        origem: r.empresa || '—',
+        descricao: r.descricao || 'Recebível avulso',
+        categoria: 'Avulso',
+        valor: centavosParaReais(saldoDevedor),
+        previsto: true,
       });
     }
 
