@@ -1,11 +1,19 @@
 // ===== Prisma schema — Best Medical (Fase 1) =====
 // PostgreSQL. Valores monetários em centavos (Int). Datas em DateTime (@db.Date).
 //
-// Dois schemas Postgres no mesmo banco: "public" (dados da empresa) e
-// "pessoal" (Controle Financeiro Pessoal, exclusivo do admin master) —
-// tabelas fisicamente separadas, sem overlap, sem custo de infraestrutura
-// extra (mesmo banco bestmedical-db do Render).
-
+// Quatro schemas Postgres no mesmo banco — tabelas fisicamente separadas,
+// sem overlap, sem custo de infraestrutura extra (mesmo banco
+// bestmedical-db do Render):
+// - "public": dados da empresa Best Medical (orçamentos, propostas, CRM,
+//   despesas/recebíveis da empresa).
+// - "pessoal": Controle Financeiro Pessoal — acesso por senha compartilhada
+//   (não pelo login de usuário da Best), ver módulo financeiro-pessoal-auth.
+// - "padu": Controle Financeiro da Padu Studios — empresa separada, sem
+//   nenhuma relação com os dados da Best.
+// - "reservado": sub-área da senha Pessoal, liberada apenas por uma segunda
+//   senha (não a mesma usada para "pessoal"). Ver financeiro-pessoal-auth —
+//   por design, nada no comportamento do sistema deve indicar a existência
+//   desse schema a quem só conhece a senha comum.
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["multiSchema"]
@@ -14,7 +22,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "pessoal"]
+  schemas  = ["public", "pessoal", "padu", "reservado"]
 }
 
 enum Perfil {
@@ -678,6 +686,30 @@ model LancamentoPessoal {
 // empresa, exclusivo do admin master (paulodick). Mesmo formato de
 // Despesa/Recebivel (baixa parcial com histórico própio), só que por pessoa.
 
+// Configuração (linha única, id fixo "config") da autenticação por senha da
+// área Pessoal — guarda só os HASHES (bcrypt) das duas senhas, nunca a senha
+// em texto puro. senhaSecretaHash começa nulo: só é preenchido quando o
+// próprio dono cadastra a segunda senha de dentro da área Pessoal.
+// Configuração (linha única) de TODA a autenticação do app Financeiro —
+// os 3 níveis em cascata (entrada/app → pessoal → secreta) e o PIN único de
+// recuperação. Só hashes, nunca senha/PIN em texto puro.
+model PessoalAuthConfig {
+  id                 String    @id @default("config")
+  // Nível 1 — abre o app (usuário fixo "paulodick"), dá acesso ao
+  // Financeiro Best (espelhado).
+  senhaEntradaHash   String?   @map("senha_entrada_hash")
+  // Nível 2 — Financeiro Pessoal.
+  senhaComumHash     String?   @map("senha_comum_hash")
+  // Nível 3 — Financeiro Top Secret.
+  senhaSecretaHash   String?   @map("senha_secreta_hash")
+  // PIN único de 6 dígitos — recupera qualquer um dos 3 níveis.
+  pinRecuperacaoHash String?   @map("pin_recuperacao_hash")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("pessoal_auth_config")
+  @@schema("pessoal")
+}
+
 model DespesaPessoal {
   id                String      @id @default(uuid())
   data              DateTime
@@ -759,4 +791,170 @@ model BaixaRecebivelPessoal {
   @@index([recebivelId])
   @@map("baixas_recebivel_pessoal")
   @@schema("pessoal")
+}
+
+// ===================== Controle Financeiro — Padu Studios =====================
+// Schema Postgres próprio ("padu") — empresa separada da Best Medical, sem
+// nenhuma relação com os dados de "public". Mesmo formato de
+// Despesa/Recebivel da empresa (baixa parcial com histórico próprio).
+
+model DespesaPadu {
+  id                String      @id @default(uuid())
+  data              DateTime
+  fornecedor        String
+  categoria         String?
+  descricao         String?
+  valorCentavos     Int         @map("valor_centavos")
+  valorPagoCentavos Int         @default(0) @map("valor_pago_centavos")
+  pago              Boolean     @default(false)
+  dataPagamento     DateTime?   @map("data_pagamento")
+  observacoes       String?
+  prioridade        Prioridade?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  baixas BaixaDespesaPadu[]
+
+  @@index([data])
+  @@index([pago])
+  @@map("despesas_padu")
+  @@schema("padu")
+}
+
+model BaixaDespesaPadu {
+  id             String   @id @default(uuid())
+  despesaId      String   @map("despesa_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  despesa DespesaPadu @relation(fields: [despesaId], references: [id], onDelete: Cascade)
+
+  @@index([despesaId])
+  @@map("baixas_despesa_padu")
+  @@schema("padu")
+}
+
+model RecebivelPadu {
+  id                String    @id @default(uuid())
+  data              DateTime
+  empresa           String
+  descricao         String?
+  valorCentavos     Int       @map("valor_centavos")
+  valorPagoCentavos Int       @default(0) @map("valor_pago_centavos")
+  pago              Boolean   @default(false)
+  dataPagamento     DateTime? @map("data_pagamento")
+  condicaoPagamento String?   @map("condicao_pagamento")
+  observacoes       String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  baixas BaixaRecebivelPadu[]
+
+  @@index([data])
+  @@index([pago])
+  @@map("recebiveis_padu")
+  @@schema("padu")
+}
+
+model BaixaRecebivelPadu {
+  id             String   @id @default(uuid())
+  recebivelId    String   @map("recebivel_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  recebivel RecebivelPadu @relation(fields: [recebivelId], references: [id], onDelete: Cascade)
+
+  @@index([recebivelId])
+  @@map("baixas_recebivel_padu")
+  @@schema("padu")
+}
+
+// ===================== Controle Financeiro Pessoal — área reservada ========
+// Schema Postgres próprio ("reservado") — liberado apenas quando a segunda
+// senha (distinta da senha comum da área Pessoal) é usada para entrar. Ver
+// financeiro-pessoal-auth: a existência deste schema não deve ficar
+// perceptível em nenhum comportamento visível de quem só tem a senha comum.
+// Mesmo formato de Despesa/Recebivel (baixa parcial com histórico próprio).
+
+model DespesaReservada {
+  id                String      @id @default(uuid())
+  data              DateTime
+  fornecedor        String
+  categoria         String?
+  descricao         String?
+  valorCentavos     Int         @map("valor_centavos")
+  valorPagoCentavos Int         @default(0) @map("valor_pago_centavos")
+  pago              Boolean     @default(false)
+  dataPagamento     DateTime?   @map("data_pagamento")
+  observacoes       String?
+  prioridade        Prioridade?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  baixas BaixaDespesaReservada[]
+
+  @@index([data])
+  @@index([pago])
+  @@map("despesas_reservadas")
+  @@schema("reservado")
+}
+
+model BaixaDespesaReservada {
+  id             String   @id @default(uuid())
+  despesaId      String   @map("despesa_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  despesa DespesaReservada @relation(fields: [despesaId], references: [id], onDelete: Cascade)
+
+  @@index([despesaId])
+  @@map("baixas_despesa_reservada")
+  @@schema("reservado")
+}
+
+model RecebivelReservado {
+  id                String    @id @default(uuid())
+  data              DateTime
+  origem            String
+  descricao         String?
+  valorCentavos     Int       @map("valor_centavos")
+  valorPagoCentavos Int       @default(0) @map("valor_pago_centavos")
+  pago              Boolean   @default(false)
+  dataPagamento     DateTime? @map("data_pagamento")
+  condicaoPagamento String?   @map("condicao_pagamento")
+  observacoes       String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  baixas BaixaRecebivelReservado[]
+
+  @@index([data])
+  @@index([pago])
+  @@map("recebiveis_reservados")
+  @@schema("reservado")
+}
+
+model BaixaRecebivelReservado {
+  id             String   @id @default(uuid())
+  recebivelId    String   @map("recebivel_id")
+  data           DateTime
+  valorCentavos  Int      @map("valor_centavos")
+  formaPagamento String   @map("forma_pagamento")
+  observacao     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  recebivel RecebivelReservado @relation(fields: [recebivelId], references: [id], onDelete: Cascade)
+
+  @@index([recebivelId])
+  @@map("baixas_recebivel_reservado")
+  @@schema("reservado")
 }
