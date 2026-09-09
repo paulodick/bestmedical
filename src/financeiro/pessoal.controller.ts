@@ -40,12 +40,16 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 // só que com a claim nivelFinanceiro. Compartilhável com esposa/contador/
 // etc. dando a eles as senhas de entrada + pessoal.
 //
-// As rotas "reservado/*" (Financeiro Top Secret) só respondem pra quem já
-// tem nível 'secreto' (@NivelMinimo('secreto')) — qualquer outra tentativa
-// recebe a mesma resposta genérica de sessão inválida que uma rota
-// inexistente, nunca uma pista de que ela existe.
+// @NivelMinimo('pessoal') na classe: um token só de nível 'entrada' (que
+// abre apenas o Financeiro Best) NÃO deve conseguir ler/escrever aqui sem
+// nunca ter passado pela senha pessoal — mesmo sendo tecnicamente um JWT
+// válido do mesmo usuário admin. As rotas "reservado/*" (Financeiro Top
+// Secret) sobrescrevem para @NivelMinimo('secreto') — qualquer outra
+// tentativa recebe a mesma resposta genérica de sessão inválida que uma
+// rota inexistente, nunca uma pista de que ela existe.
 @Public()
 @UseGuards(NivelFinanceiroGuard)
+@NivelMinimo('pessoal')
 @Controller('financeiro/pessoal')
 export class PessoalController {
   constructor(
