@@ -10,8 +10,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Public } from '../auth/public.decorator';
-import { PessoalTokenGuard } from '../financeiro-pessoal-auth/pessoal-token.guard';
-import { EscopoMinimo } from '../financeiro-pessoal-auth/escopo-minimo.decorator';
+import { NivelFinanceiroGuard } from '../financeiro-pessoal-auth/nivel-financeiro.guard';
+import { NivelMinimo } from '../financeiro-pessoal-auth/nivel-minimo.decorator';
 import { PessoalService } from './pessoal.service';
 import { ReservadoService } from './reservado.service';
 import {
@@ -33,17 +33,19 @@ import {
 import { CreateBaixaDto } from './dto/baixa.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 
-// Controle Financeiro Pessoal — NÃO usa o login de usuário da Best (JWT
-// global): é liberado pela senha própria de financeiro-pessoal-auth,
-// compartilhável com esposa/contador/etc. @Public() tira o JwtAuthGuard
-// global; PessoalTokenGuard é o único gatekeeper daqui pra baixo.
+// Controle Financeiro Pessoal — nível 2 da cascata do app Financeiro
+// (entrada -> pessoal -> secreto). O token ainda é validado pelo
+// NivelFinanceiroGuard, não pelo JwtAuthGuard global (por isso @Public() em
+// tudo daqui pra baixo) — mas é o MESMO JWT de usuário da Best por baixo,
+// só que com a claim nivelFinanceiro. Compartilhável com esposa/contador/
+// etc. dando a eles as senhas de entrada + pessoal.
 //
-// As rotas "reservado/*" só respondem para quem entrou com a segunda senha
-// (@EscopoMinimo('reservado')) — qualquer outra tentativa recebe a mesma
-// resposta genérica de sessão inválida que uma rota inexistente, nunca uma
-// pista de que ela existe.
+// As rotas "reservado/*" (Financeiro Top Secret) só respondem pra quem já
+// tem nível 'secreto' (@NivelMinimo('secreto')) — qualquer outra tentativa
+// recebe a mesma resposta genérica de sessão inválida que uma rota
+// inexistente, nunca uma pista de que ela existe.
 @Public()
-@UseGuards(PessoalTokenGuard)
+@UseGuards(NivelFinanceiroGuard)
 @Controller('financeiro/pessoal')
 export class PessoalController {
   constructor(
@@ -141,55 +143,55 @@ export class PessoalController {
 
   // ===================== Reservado (segunda senha) =====================
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Get('reservado/resumo')
   resumoReservado() {
     return this.reservado.resumo();
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Get('reservado/fluxo-caixa')
   fluxoCaixaReservado() {
     return this.reservado.fluxoCaixa();
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Get('reservado/despesas')
   listDespesasReservado(@Query() q: PaginationDto) {
     return this.reservado.listDespesas(q);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Post('reservado/despesas')
   createDespesaReservado(@Body() dto: CreateDespesaReservadaDto) {
     return this.reservado.createDespesa(dto);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Put('reservado/despesas/:id')
   updateDespesaReservado(@Param('id') id: string, @Body() dto: UpdateDespesaReservadaDto) {
     return this.reservado.updateDespesa(id, dto);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Delete('reservado/despesas/:id')
   removeDespesaReservado(@Param('id') id: string) {
     return this.reservado.removeDespesa(id);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Get('reservado/despesas/:id/baixas')
   listarBaixasDespesaReservado(@Param('id') id: string) {
     return this.reservado.listarBaixasDespesa(id);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Post('reservado/despesas/:id/baixas')
   registrarBaixaDespesaReservado(@Param('id') id: string, @Body() dto: CreateBaixaDto) {
     return this.reservado.registrarBaixaDespesa(id, dto);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Delete('reservado/despesas/:id/baixas/:baixaId')
   removerBaixaDespesaReservado(
     @Param('id') id: string,
@@ -198,19 +200,19 @@ export class PessoalController {
     return this.reservado.removerBaixaDespesa(id, baixaId);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Get('reservado/recebiveis')
   listRecebiveisReservado(@Query() q: PaginationDto) {
     return this.reservado.listRecebiveis(q);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Post('reservado/recebiveis')
   createRecebivelReservado(@Body() dto: CreateRecebivelReservadoDto) {
     return this.reservado.createRecebivel(dto);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Put('reservado/recebiveis/:id')
   updateRecebivelReservado(
     @Param('id') id: string,
@@ -219,25 +221,25 @@ export class PessoalController {
     return this.reservado.updateRecebivel(id, dto);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Delete('reservado/recebiveis/:id')
   removeRecebivelReservado(@Param('id') id: string) {
     return this.reservado.removeRecebivel(id);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Get('reservado/recebiveis/:id/baixas')
   listarBaixasRecebivelReservado(@Param('id') id: string) {
     return this.reservado.listarBaixasRecebivel(id);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Post('reservado/recebiveis/:id/baixas')
   registrarBaixaRecebivelReservado(@Param('id') id: string, @Body() dto: CreateBaixaDto) {
     return this.reservado.registrarBaixaRecebivel(id, dto);
   }
 
-  @EscopoMinimo('reservado')
+  @NivelMinimo('secreto')
   @Delete('reservado/recebiveis/:id/baixas/:baixaId')
   removerBaixaRecebivelReservado(
     @Param('id') id: string,

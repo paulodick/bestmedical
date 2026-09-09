@@ -690,13 +690,21 @@ model LancamentoPessoal {
 // área Pessoal — guarda só os HASHES (bcrypt) das duas senhas, nunca a senha
 // em texto puro. senhaSecretaHash começa nulo: só é preenchido quando o
 // próprio dono cadastra a segunda senha de dentro da área Pessoal.
+// Configuração (linha única) de TODA a autenticação do app Financeiro —
+// os 3 níveis em cascata (entrada/app → pessoal → secreta) e o PIN único de
+// recuperação. Só hashes, nunca senha/PIN em texto puro.
 model PessoalAuthConfig {
-  id                String    @id @default("config")
-  senhaComumHash    String?   @map("senha_comum_hash")
-  senhaSecretaHash  String?   @map("senha_secreta_hash")
-  resetTokenHash    String?   @map("reset_token_hash")
-  resetTokenExpira  DateTime? @map("reset_token_expira")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default("config")
+  // Nível 1 — abre o app (usuário fixo "paulodick"), dá acesso ao
+  // Financeiro Best (espelhado).
+  senhaEntradaHash   String?   @map("senha_entrada_hash")
+  // Nível 2 — Financeiro Pessoal.
+  senhaComumHash     String?   @map("senha_comum_hash")
+  // Nível 3 — Financeiro Top Secret.
+  senhaSecretaHash   String?   @map("senha_secreta_hash")
+  // PIN único de 6 dígitos — recupera qualquer um dos 3 níveis.
+  pinRecuperacaoHash String?   @map("pin_recuperacao_hash")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   @@map("pessoal_auth_config")
   @@schema("pessoal")

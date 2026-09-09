@@ -1,11 +1,11 @@
 import { IsString, MinLength } from 'class-validator';
 
-export class RedefinirSenhaPessoalDto {
+export class EntrarAppDto {
   @IsString()
   @MinLength(1)
-  token: string;
+  usuario: string;
 
   @IsString()
-  @MinLength(6)
-  novaSenha: string;
+  @MinLength(1)
+  senha: string;
 }

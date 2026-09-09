@@ -2,22 +2,28 @@ import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/public.decorator';
 import { FinanceiroPessoalAuthService } from './financeiro-pessoal-auth.service';
-import { PessoalTokenGuard } from './pessoal-token.guard';
+import { NivelFinanceiroGuard } from './nivel-financeiro.guard';
+import { NivelMinimo } from './nivel-minimo.decorator';
+import { EntrarAppDto } from './dto/entrar-app.dto';
+import { CadastrarEntradaDto } from './dto/cadastrar-entrada.dto';
 import { EntrarPessoalDto } from './dto/entrar.dto';
 import { CadastrarPessoalDto } from './dto/cadastrar.dto';
-import { RedefinirSenhaPessoalDto } from './dto/redefinir-senha.dto';
+import { RecuperarDto } from './dto/recuperar.dto';
 
-// Único ponto de entrada da área Pessoal — não usa o login de usuário da
-// Best. Limite de tentativas mais apertado que o padrão global (120/min)
-// nas rotas que verificam senha, contra força bruta.
 const LIMITE_SENHA = { default: { limit: 8, ttl: 5 * 60 * 1000 } };
+// PIN de 6 dígitos: limite bem mais apertado (defesa contra força bruta —
+// 10^6 combinações é pouco se não houver limite de tentativas).
+const LIMITE_PIN = { default: { limit: 5, ttl: 30 * 60 * 1000 } };
 
-@Controller('financeiro/pessoal')
+// Toda a autenticação em cascata do app Financeiro: entrada (nível 1,
+// usuário fixo "paulodick") -> pessoal (nível 2) -> secreto (nível 3,
+// gatilho disfarçado no front-end) — e a recuperação por PIN único.
+@Controller('financeiro')
 export class FinanceiroPessoalAuthController {
   constructor(private service: FinanceiroPessoalAuthService) {}
 
-  // A tela de entrada consulta isto pra decidir se mostra "cadastrar senha"
-  // (primeiríssimo acesso) ou o formulário normal de senha.
+  // ----- Nível 1: entrada do app -----
+
   @Public()
   @Get('status')
   status() {
@@ -26,54 +32,67 @@ export class FinanceiroPessoalAuthController {
 
   @Public()
   @Throttle(LIMITE_SENHA)
-  @Post('cadastrar')
-  cadastrar(@Body() dto: CadastrarPessoalDto) {
-    return this.service.cadastrar(dto.senha);
+  @Post('cadastrar-entrada')
+  cadastrarEntrada(@Body() dto: CadastrarEntradaDto) {
+    return this.service.cadastrarEntrada(dto);
   }
 
   @Public()
   @Throttle(LIMITE_SENHA)
   @Post('entrar')
-  entrar(@Body() dto: EntrarPessoalDto) {
-    return this.service.entrar(dto.senha);
+  entrarApp(@Body() dto: EntrarAppDto) {
+    return this.service.entrarApp(dto);
   }
 
-  // Só chamável já logado (qualquer escopo válido) — cadastra a segunda
-  // senha uma única vez. @Public() é necessário mesmo aqui: o token
-  // enviado é o do financeiro-pessoal-auth (segredo próprio), não o JWT de
-  // usuário da Best — sem @Public() o guard global tentaria validar esse
-  // token com a estratégia errada e rejeitaria antes do PessoalTokenGuard
-  // rodar. Quem de fato exige uma sessão válida aqui é o PessoalTokenGuard.
+  // ----- Nível 2: Financeiro Pessoal -----
+  // @Public() necessário mesmo autenticado: o token é validado pelo
+  // NivelFinanceiroGuard (aplicado no método), não pelo JwtAuthGuard
+  // global — que também aceitaria o token (mesmo segredo), mas não checa
+  // nivelFinanceiro, então não bastaria sozinho.
+
   @Public()
-  @UseGuards(PessoalTokenGuard)
+  @UseGuards(NivelFinanceiroGuard)
   @Throttle(LIMITE_SENHA)
-  @Post('cadastrar-secreta')
-  cadastrarSecreta(@Body() dto: CadastrarPessoalDto) {
-    return this.service.cadastrarSecreta(dto.senha);
+  @Post('pessoal/cadastrar')
+  cadastrarPessoal(@Body() dto: CadastrarPessoalDto) {
+    return this.service.cadastrarPessoal(dto.senha);
   }
 
-  // O gatilho "disfarçado de bug" — só chamável já logado. Resposta sempre
-  // no mesmo formato de erro genérico do PessoalTokenGuard quando a senha
-  // não bate.
   @Public()
-  @UseGuards(PessoalTokenGuard)
+  @UseGuards(NivelFinanceiroGuard)
   @Throttle(LIMITE_SENHA)
-  @Post('entrar-secreta')
-  entrarSecreta(@Body() dto: EntrarPessoalDto) {
-    return this.service.entrarSecreta(dto.senha);
+  @Post('pessoal/entrar')
+  entrarPessoal(@Body() dto: EntrarPessoalDto) {
+    return this.service.entrarPessoal(dto.senha);
   }
 
-  @Public()
-  @Throttle({ default: { limit: 3, ttl: 15 * 60 * 1000 } })
-  @Post('esqueci-senha')
-  esqueciSenha() {
-    return this.service.esqueciSenha();
-  }
+  // ----- Nível 3: Financeiro Top Secret -----
+  // Exige nível 'pessoal' já ativo (@NivelMinimo).
 
   @Public()
+  @UseGuards(NivelFinanceiroGuard)
+  @NivelMinimo('pessoal')
   @Throttle(LIMITE_SENHA)
-  @Post('redefinir-senha')
-  redefinirSenha(@Body() dto: RedefinirSenhaPessoalDto) {
-    return this.service.redefinirSenha(dto.token, dto.novaSenha);
+  @Post('pessoal/reservado/cadastrar')
+  cadastrarSecreto(@Body() dto: CadastrarPessoalDto) {
+    return this.service.cadastrarSecreto(dto.senha);
+  }
+
+  @Public()
+  @UseGuards(NivelFinanceiroGuard)
+  @NivelMinimo('pessoal')
+  @Throttle(LIMITE_SENHA)
+  @Post('pessoal/reservado/entrar')
+  entrarSecreto(@Body() dto: EntrarPessoalDto) {
+    return this.service.entrarSecreto(dto.senha);
+  }
+
+  // ----- Recuperação (PIN único) -----
+
+  @Public()
+  @Throttle(LIMITE_PIN)
+  @Post('recuperar')
+  recuperar(@Body() dto: RecuperarDto) {
+    return this.service.recuperar(dto.pin);
   }
 }
