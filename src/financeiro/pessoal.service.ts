@@ -9,6 +9,7 @@ import {
   UpdateRecebivelPessoalDto,
 } from './dto/recebivel-pessoal.dto';
 import { CreateBaixaDto } from './dto/baixa.dto';
+import { AjustarSaldoDto } from './dto/ajustar-saldo.dto';
 import { PrioridadeDespesa } from './dto/despesa.dto';
 import { PaginationDto, Paginated } from '../common/dto/pagination.dto';
 import {
@@ -556,7 +557,7 @@ export class PessoalService {
   // ===== Resumo financeiro pessoal (Dashboard) =====
   async resumo() {
     const hoje = hojeIso();
-    const [despesas, recebiveis, baixasDespesa, baixasRecebivel] = await Promise.all([
+    const [despesas, recebiveis, baixasDespesa, baixasRecebivel, saldoConfig] = await Promise.all([
       this.prisma.despesaPessoal.findMany({
         select: {
           id: true,
@@ -585,7 +586,9 @@ export class PessoalService {
       this.prisma.baixaRecebivelPessoal.findMany({
         select: { data: true, valorCentavos: true },
       }),
+      this.prisma.saldoConfigPessoal.findUnique({ where: { id: 'config' } }),
     ]);
+    const saldoInicialCent = saldoConfig?.saldoInicialCentavos ?? 0;
 
     const receitaTotalCent = recebiveis.reduce((s, r) => s + r.valorCentavos, 0);
     const receitaRecebidaCent = recebiveis.reduce(
@@ -625,7 +628,7 @@ export class PessoalService {
       };
     });
 
-    let acumulado = 0;
+    let acumulado = centavosParaReais(saldoInicialCent);
     const saldoAcumulado = fluxo.map((f) => {
       acumulado += f.saldo;
       return { mes: f.mes, saldo: Number(acumulado.toFixed(2)) };
@@ -701,6 +704,10 @@ export class PessoalService {
         despesaPendente: centavosParaReais(despesaPendenteCent),
         resultado: centavosParaReais(receitaRecebidaCent - despesaPagaCent),
       },
+      saldoInicial: centavosParaReais(saldoInicialCent),
+      saldoAtual: centavosParaReais(
+        saldoInicialCent + (receitaRecebidaCent - despesaPagaCent),
+      ),
       fluxo,
       saldoAcumulado,
       despesasPorCategoria,
@@ -708,5 +715,18 @@ export class PessoalService {
       contasAReceber,
       atividadeRecente,
     };
+  }
+
+  // ===== Ajuste manual do saldo em caixa =====
+  async ajustarSaldo(dto: AjustarSaldoDto) {
+    const atual = await this.resumo();
+    const novoSaldoInicialCent =
+      reaisParaCentavos(dto.saldoAtual) - reaisParaCentavos(atual.kpis.resultado);
+    await this.prisma.saldoConfigPessoal.upsert({
+      where: { id: 'config' },
+      create: { id: 'config', saldoInicialCentavos: novoSaldoInicialCent },
+      update: { saldoInicialCentavos: novoSaldoInicialCent },
+    });
+    return this.resumo();
   }
 }

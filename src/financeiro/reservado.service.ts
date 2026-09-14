@@ -3,11 +3,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateDespesaReservadaDto, UpdateDespesaReservadaDto } from './dto/despesa-reservada.dto';
 import { CreateRecebivelReservadoDto, UpdateRecebivelReservadoDto } from './dto/recebivel-reservado.dto';
 import { CreateBaixaDto } from './dto/baixa.dto';
+import { AjustarSaldoDto } from './dto/ajustar-saldo.dto';
 import { PrioridadeDespesa } from './dto/despesa.dto';
 import { PaginationDto, Paginated } from '../common/dto/pagination.dto';
 import { reaisParaCentavos, centavosParaReais } from '../orcamentos/orcamento.calc';
 import { Prisma } from '@prisma/client';
 import { FluxoCaixaLancamento } from './despesas.service';
+import { PessoalService } from './pessoal.service';
 
 export interface DespesaReservadaApi {
   id: string;
@@ -67,7 +69,10 @@ function hojeIso(): string {
 // PessoalService/PaduService (baixa parcial com histórico), sem "pessoa".
 @Injectable()
 export class ReservadoService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pessoal: PessoalService,
+  ) {}
 
   // ===================== Despesas =====================
 
@@ -454,7 +459,24 @@ export class ReservadoService {
   }
 
   // ===================== Fluxo de Caixa =====================
+  // O Top Secret mostra a JUNÇÃO do fluxo de caixa Pessoal com os
+  // lançamentos próprios (ocultos) do Reservado — ambos são, no fim, do
+  // âmbito pessoal; o Reservado só acrescenta o que fica fora do Pessoal
+  // "comum". Os ids de cada lado já têm prefixos distintos
+  // (recp-/despp- vs resrec-/resdesp-), sem risco de colisão.
   async fluxoCaixa(): Promise<FluxoCaixaLancamento[]> {
+    const [lancamentosPessoal, lancamentosProprios] = await Promise.all([
+      this.pessoal.fluxoCaixa(),
+      this.fluxoCaixaProprio(),
+    ]);
+
+    return [...lancamentosPessoal, ...lancamentosProprios].sort((a, b) =>
+      a.data.localeCompare(b.data),
+    );
+  }
+
+  // Só os lançamentos do próprio schema "reservado" (sem o Pessoal).
+  private async fluxoCaixaProprio(): Promise<FluxoCaixaLancamento[]> {
     const [baixasDespesa, baixasRecebivel, recebiveis] = await Promise.all([
       this.prisma.baixaDespesaReservada.findMany({
         include: { despesa: { select: { fornecedor: true, categoria: true, descricao: true } } },
@@ -512,9 +534,99 @@ export class ReservadoService {
   }
 
   // ===== Resumo financeiro (Dashboard) =====
+  // Junção do resumo Pessoal com o resumo próprio (oculto) do Reservado —
+  // mesma lógica do fluxoCaixa() acima. Editar o saldo aqui (ajustarSaldo)
+  // mexe só na parte oculta; o ajuste do Pessoal continua editável a partir
+  // do Dashboard Pessoal normalmente.
   async resumo() {
+    const [pessoal, proprio] = await Promise.all([
+      this.pessoal.resumo(),
+      this.resumoProprio(),
+    ]);
+
+    const kpis = {
+      receitaRecebida: r2(pessoal.kpis.receitaRecebida + proprio.kpis.receitaRecebida),
+      receitaAberta: r2(pessoal.kpis.receitaAberta + proprio.kpis.receitaAberta),
+      despesaTotal: r2(pessoal.kpis.despesaTotal + proprio.kpis.despesaTotal),
+      despesaPaga: r2(pessoal.kpis.despesaPaga + proprio.kpis.despesaPaga),
+      despesaPendente: r2(pessoal.kpis.despesaPendente + proprio.kpis.despesaPendente),
+      resultado: r2(pessoal.kpis.resultado + proprio.kpis.resultado),
+    };
+
+    const fluxo = proprio.fluxo.map((f, i) => {
+      const p = pessoal.fluxo[i];
+      return {
+        mes: f.mes,
+        entrada: r2(f.entrada + p.entrada),
+        saida: r2(f.saida + p.saida),
+        saldo: r2(f.saldo + p.saldo),
+      };
+    });
+
+    const saldoInicial = r2(pessoal.saldoInicial + proprio.saldoInicial);
+    let acumulado = saldoInicial;
+    const saldoAcumulado = fluxo.map((f) => {
+      acumulado += f.saldo;
+      return { mes: f.mes, saldo: r2(acumulado) };
+    });
+    const saldoAtual = r2(pessoal.saldoAtual + proprio.saldoAtual);
+
+    const categoriaMap = new Map<string, number>();
+    for (const c of [...pessoal.despesasPorCategoria, ...proprio.despesasPorCategoria]) {
+      categoriaMap.set(c.categoria, (categoriaMap.get(c.categoria) ?? 0) + c.valor);
+    }
+    const despesasPorCategoria = Array.from(categoriaMap.entries())
+      .map(([categoria, valor]) => ({ categoria, valor: r2(valor) }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const contasAPagar = {
+      total: r2(pessoal.contasAPagar.total + proprio.contasAPagar.total),
+      aPagar: r2(pessoal.contasAPagar.aPagar + proprio.contasAPagar.aPagar),
+      atrasado: r2(pessoal.contasAPagar.atrasado + proprio.contasAPagar.atrasado),
+    };
+    const contasAReceber = {
+      total: r2(pessoal.contasAReceber.total + proprio.contasAReceber.total),
+      aReceber: r2(pessoal.contasAReceber.aReceber + proprio.contasAReceber.aReceber),
+      atrasado: r2(pessoal.contasAReceber.atrasado + proprio.contasAReceber.atrasado),
+    };
+
+    const atividadeRecente = [...pessoal.atividadeRecente, ...proprio.atividadeRecente]
+      .sort((a, b) => b.data.localeCompare(a.data))
+      .slice(0, 8);
+
+    return {
+      kpis,
+      saldoInicial,
+      saldoAtual,
+      fluxo,
+      saldoAcumulado,
+      despesasPorCategoria,
+      contasAPagar,
+      contasAReceber,
+      atividadeRecente,
+    };
+  }
+
+  // ===== Ajuste manual do saldo em caixa (só a parte oculta) =====
+  async ajustarSaldo(dto: AjustarSaldoDto) {
+    const [pessoal, proprio] = await Promise.all([this.pessoal.resumo(), this.resumoProprio()]);
+    const novoSaldoInicialCent =
+      reaisParaCentavos(dto.saldoAtual) -
+      reaisParaCentavos(pessoal.saldoAtual) -
+      reaisParaCentavos(proprio.kpis.resultado);
+    await this.prisma.saldoConfigReservado.upsert({
+      where: { id: 'config' },
+      create: { id: 'config', saldoInicialCentavos: novoSaldoInicialCent },
+      update: { saldoInicialCentavos: novoSaldoInicialCent },
+    });
+    return this.resumo();
+  }
+
+  // Só o resumo do próprio schema "reservado" (sem o Pessoal) — usado
+  // internamente por resumo()/ajustarSaldo() acima.
+  private async resumoProprio() {
     const hoje = hojeIso();
-    const [despesas, recebiveis, baixasDespesa, baixasRecebivel] = await Promise.all([
+    const [despesas, recebiveis, baixasDespesa, baixasRecebivel, saldoConfig] = await Promise.all([
       this.prisma.despesaReservada.findMany({
         select: {
           id: true,
@@ -539,7 +651,9 @@ export class ReservadoService {
       }),
       this.prisma.baixaDespesaReservada.findMany({ select: { data: true, valorCentavos: true } }),
       this.prisma.baixaRecebivelReservado.findMany({ select: { data: true, valorCentavos: true } }),
+      this.prisma.saldoConfigReservado.findUnique({ where: { id: 'config' } }),
     ]);
+    const saldoInicialCent = saldoConfig?.saldoInicialCentavos ?? 0;
 
     const receitaTotalCent = recebiveis.reduce((s, r) => s + r.valorCentavos, 0);
     const receitaRecebidaCent = recebiveis.reduce(
@@ -578,7 +692,7 @@ export class ReservadoService {
       };
     });
 
-    let acumulado = 0;
+    let acumulado = centavosParaReais(saldoInicialCent);
     const saldoAcumulado = fluxo.map((f) => {
       acumulado += f.saldo;
       return { mes: f.mes, saldo: Number(acumulado.toFixed(2)) };
@@ -654,6 +768,10 @@ export class ReservadoService {
         despesaPendente: centavosParaReais(despesaPendenteCent),
         resultado: centavosParaReais(receitaRecebidaCent - despesaPagaCent),
       },
+      saldoInicial: centavosParaReais(saldoInicialCent),
+      saldoAtual: centavosParaReais(
+        saldoInicialCent + (receitaRecebidaCent - despesaPagaCent),
+      ),
       fluxo,
       saldoAcumulado,
       despesasPorCategoria,
@@ -662,4 +780,10 @@ export class ReservadoService {
       atividadeRecente,
     };
   }
+}
+
+// Arredonda para 2 casas decimais (evita erros de ponto flutuante ao somar
+// valores em reais já arredondados vindos de resumo()s diferentes).
+function r2(n: number): number {
+  return Number(n.toFixed(2));
 }

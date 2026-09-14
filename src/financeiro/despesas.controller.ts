@@ -23,6 +23,7 @@ import {
   UpdateRecebivelDto,
 } from './dto/recebivel.dto';
 import { CreateBaixaDto } from './dto/baixa.dto';
+import { AjustarSaldoDto } from './dto/ajustar-saldo.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -53,6 +54,13 @@ export class DespesasController {
   @Get('fluxo-caixa')
   fluxoCaixa() {
     return this.despesas.fluxoCaixa();
+  }
+
+  // Ajusta o saldo em caixa exibido no Dashboard para o valor real informado.
+  @Roles('admin')
+  @Put('saldo')
+  ajustarSaldo(@Body() dto: AjustarSaldoDto) {
+    return this.despesas.ajustarSaldo(dto);
   }
 
   @Roles('admin')

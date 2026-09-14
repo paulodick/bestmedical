@@ -958,3 +958,42 @@ model BaixaRecebivelReservado {
   @@map("baixas_recebivel_reservado")
   @@schema("reservado")
 }
+
+// ===== Saldo em caixa (ajuste manual) =====
+// O "saldo acumulado" do resumo/dashboard é, por padrão, só a soma das
+// entradas/saídas registradas no sistema — não é um saldo bancário real.
+// Esta linha única por escopo guarda um valor de ajuste (pode ser positivo
+// ou negativo) que é somado a essa soma, permitindo ao usuário corrigir o
+// saldo exibido para bater com a realidade (ex.: despesas já pagas fora do
+// sistema antes de começar a usá-lo). Editável a qualquer momento a partir
+// do próprio Dashboard.
+model SaldoConfigBest {
+  id                   String   @id @default("config")
+  saldoInicialCentavos Int      @default(0) @map("saldo_inicial_centavos")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+
+  @@map("saldo_config_best")
+  @@schema("public")
+}
+
+model SaldoConfigPessoal {
+  id                   String   @id @default("config")
+  saldoInicialCentavos Int      @default(0) @map("saldo_inicial_centavos")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+
+  @@map("saldo_config_pessoal")
+  @@schema("pessoal")
+}
+
+// Ajuste próprio do escopo Top Secret — somado ao saldo do Pessoal (ver
+// ReservadoService.resumo()), já que o dashboard Top Secret mostra a junção
+// dos dois. Editar o saldo aqui ajusta só a parte oculta, sem mexer no
+// ajuste do Pessoal.
+model SaldoConfigReservado {
+  id                   String   @id @default("config")
+  saldoInicialCentavos Int      @default(0) @map("saldo_inicial_centavos")
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em")
+
+  @@map("saldo_config_reservado")
+  @@schema("reservado")
+}

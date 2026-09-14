@@ -31,6 +31,7 @@ import {
   UpdateRecebivelReservadoDto,
 } from './dto/recebivel-reservado.dto';
 import { CreateBaixaDto } from './dto/baixa.dto';
+import { AjustarSaldoDto } from './dto/ajustar-saldo.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 
 // Controle Financeiro Pessoal — nível 2 da cascata do app Financeiro
@@ -67,6 +68,11 @@ export class PessoalController {
   @Get('fluxo-caixa')
   fluxoCaixaPessoal() {
     return this.pessoal.fluxoCaixa();
+  }
+
+  @Put('saldo')
+  ajustarSaldoPessoal(@Body() dto: AjustarSaldoDto) {
+    return this.pessoal.ajustarSaldo(dto);
   }
 
   @Get('despesas')
@@ -157,6 +163,12 @@ export class PessoalController {
   @Get('reservado/fluxo-caixa')
   fluxoCaixaReservado() {
     return this.reservado.fluxoCaixa();
+  }
+
+  @NivelMinimo('secreto')
+  @Put('reservado/saldo')
+  ajustarSaldoReservado(@Body() dto: AjustarSaldoDto) {
+    return this.reservado.ajustarSaldo(dto);
   }
 
   @NivelMinimo('secreto')

@@ -7,6 +7,7 @@ import {
   PrioridadeDespesa,
 } from './dto/despesa.dto';
 import { CreateBaixaDto } from './dto/baixa.dto';
+import { AjustarSaldoDto } from './dto/ajustar-saldo.dto';
 import { PaginationDto, Paginated } from '../common/dto/pagination.dto';
 import {
   reaisParaCentavos,
@@ -536,7 +537,7 @@ export class DespesasService {
   // a pagar/receber + inadimplência + atividade recente.
   async resumo() {
     const hoje = hojeIso();
-    const [despesas, orcamentos, propostas, recebiveis, baixasDespesa, baixasRecebivel] =
+    const [despesas, orcamentos, propostas, recebiveis, baixasDespesa, baixasRecebivel, saldoConfig] =
       await Promise.all([
         this.prisma.despesa.findMany({
           select: {
@@ -590,7 +591,9 @@ export class DespesasService {
         this.prisma.baixaRecebivel.findMany({
           select: { data: true, valorCentavos: true },
         }),
+        this.prisma.saldoConfigBest.findUnique({ where: { id: 'config' } }),
       ]);
+    const saldoInicialCent = saldoConfig?.saldoInicialCentavos ?? 0;
 
     // Total efetivo = total manual quando informado, senão o total calculado.
     const totalEfetivo = (r: {
@@ -679,10 +682,11 @@ export class DespesasService {
       };
     });
 
-    // Saldo acumulado: soma corrida do saldo mensal (não é saldo bancário
-    // real — o sistema não tem conceito de conta/saldo inicial — é apenas o
-    // acumulado de entradas menos saídas desde o início dos 12 meses acima).
-    let acumulado = 0;
+    // Saldo acumulado: soma corrida do saldo mensal a partir do saldo
+    // inicial (ajuste manual, ver ajustarSaldo() — 0 por padrão). Sem esse
+    // ajuste seria só o acumulado de entradas menos saídas desde o início
+    // dos 12 meses acima, sem relação com o saldo bancário real.
+    let acumulado = centavosParaReais(saldoInicialCent);
     const saldoAcumulado = fluxo.map((f) => {
       acumulado += f.saldo;
       return { mes: f.mes, saldo: Number(acumulado.toFixed(2)) };
@@ -820,6 +824,13 @@ export class DespesasService {
         // Resultado = tudo que entrou (recebido) menos tudo que saiu (pago).
         resultado: centavosParaReais(receitaRecebidaCent - despesaPagaCent),
       },
+      // saldoInicial: ajuste manual (ver ajustarSaldo()). saldoAtual: saldo
+      // inicial + resultado realizado (receitas recebidas - despesas pagas)
+      // desde sempre — o mesmo número que fecha o saldoAcumulado acima.
+      saldoInicial: centavosParaReais(saldoInicialCent),
+      saldoAtual: centavosParaReais(
+        saldoInicialCent + (receitaRecebidaCent - despesaPagaCent),
+      ),
       fluxo,
       saldoAcumulado,
       despesasPorCategoria,
@@ -830,5 +841,22 @@ export class DespesasService {
       maioresAtrasos,
       atividadeRecente,
     };
+  }
+
+  // ===== Ajuste manual do saldo em caixa =====
+  // O usuário informa o valor real que deveria estar em caixa agora (ex.:
+  // já pagou várias despesas fora do sistema antes de começar a usá-lo); o
+  // backend resolve o saldoInicial necessário para que resumo() passe a
+  // mostrar exatamente esse valor.
+  async ajustarSaldo(dto: AjustarSaldoDto) {
+    const atual = await this.resumo();
+    const novoSaldoInicialCent =
+      reaisParaCentavos(dto.saldoAtual) - reaisParaCentavos(atual.kpis.resultado);
+    await this.prisma.saldoConfigBest.upsert({
+      where: { id: 'config' },
+      create: { id: 'config', saldoInicialCentavos: novoSaldoInicialCent },
+      update: { saldoInicialCentavos: novoSaldoInicialCent },
+    });
+    return this.resumo();
   }
 }
