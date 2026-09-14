@@ -528,7 +528,7 @@ export class PaduService {
       this.prisma.recebivelPadu.findMany({
         select: {
           id: true,
-          origem: true,
+          empresa: true,
           dataPagamento: true,
           valorCentavos: true,
           valorPagoCentavos: true,
