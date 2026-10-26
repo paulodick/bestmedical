@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -126,6 +128,32 @@ export class DespesasController {
       'Content-Length': buffer.length,
     });
     res.end(buffer);
+  }
+
+  // Parcelas de orçamentos aprovados e mensalidades de contratos assinados
+  // (entradas que também aparecem no Fluxo de Caixa) — tela Recebíveis.
+  @Roles('admin')
+  @Get('recebiveis-consolidados')
+  recebiveisConsolidados() {
+    return this.despesas.recebiveisConsolidados();
+  }
+
+  @Roles('admin')
+  @Patch('recebiveis-consolidados/:tipo/:docId/pago')
+  marcarPagoConsolidado(
+    @Param('tipo') tipo: string,
+    @Param('docId') docId: string,
+    @Body() dto: { pago: boolean; parcelaId?: string | null },
+  ) {
+    if (tipo !== 'orcamento' && tipo !== 'contrato') {
+      throw new BadRequestException('Tipo inválido');
+    }
+    return this.despesas.marcarPagoConsolidado(
+      tipo,
+      docId,
+      !!dto.pago,
+      dto.parcelaId ?? null,
+    );
   }
 
   // ===== Recebíveis avulsos (manuais) =====

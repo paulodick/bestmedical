@@ -42,6 +42,23 @@ export interface BaixaApi {
   observacao: string | null;
 }
 
+// Linha da lista consolidada de Recebíveis: parcelas de orçamentos aprovados
+// e mensalidades de contratos assinados (os avulsos vêm de /recebiveis).
+export interface RecebivelConsolidadoApi {
+  id: string;
+  tipo: 'orcamento' | 'contrato';
+  docId: string;
+  parcelaId: string | null;
+  numero: string;
+  empresa: string;
+  descricao: string;
+  data: string;
+  dataPagamento: string | null;
+  condicaoPagamento: string | null;
+  valor: number;
+  pago: boolean;
+}
+
 // Um lançamento individual de fluxo de caixa. `data` é sempre a data de
 // pagamento estimada/prevista (mesma exibida na página Recebíveis) — não a
 // data em que alguém marcou o item como pago no sistema. `previsto: true`
@@ -529,6 +546,198 @@ export class DespesasService {
     }
 
     return lancamentos.sort((a, b) => a.data.localeCompare(b.data));
+  }
+
+  // ===== Recebíveis consolidados (orçamentos + contratos) =====
+  // Usado pela tela Recebíveis do app financeiro: lista cada parcela (ou o
+  // documento inteiro, quando não há parcelamento) de orçamentos aprovados
+  // e contratos assinados, com a data de pagamento estimada.
+  async recebiveisConsolidados(): Promise<RecebivelConsolidadoApi[]> {
+    const [orcamentos, propostas] = await Promise.all([
+      this.prisma.orcamento.findMany({
+        where: { statusCancelado: false, statusAprovado: true },
+        select: {
+          id: true,
+          numero: true,
+          data: true,
+          clienteNomeSnap: true,
+          totalCentavos: true,
+          totalManualCentavos: true,
+          statusPago: true,
+          dataPagamento: true,
+          condicaoPagamento: true,
+          parcelas: {
+            select: {
+              id: true,
+              numero: true,
+              valorCentavos: true,
+              pago: true,
+              dataVencimento: true,
+            },
+            orderBy: { numero: 'asc' },
+          },
+        },
+      }),
+      this.prisma.proposta.findMany({
+        where: { statusCancelado: false, statusAssinado: true },
+        select: {
+          id: true,
+          numero: true,
+          data: true,
+          clienteNomeSnap: true,
+          tipoContrato: true,
+          totalCentavos: true,
+          totalManualCentavos: true,
+          statusPago: true,
+          dataPagamento: true,
+          parcelasContrato: {
+            select: {
+              id: true,
+              numero: true,
+              valorCentavos: true,
+              pago: true,
+              dataVencimento: true,
+            },
+            orderBy: { numero: 'asc' },
+          },
+        },
+      }),
+    ]);
+
+    const totalEfetivo = (r: {
+      totalCentavos: number;
+      totalManualCentavos: number | null;
+    }) => r.totalManualCentavos ?? r.totalCentavos ?? 0;
+
+    const linhas: RecebivelConsolidadoApi[] = [];
+
+    for (const o of orcamentos) {
+      if (o.parcelas.length > 0) {
+        for (const p of o.parcelas) {
+          linhas.push({
+            id: `orc-${o.id}-${p.id}`,
+            tipo: 'orcamento',
+            docId: o.id,
+            parcelaId: p.id,
+            numero: o.numero,
+            empresa: o.clienteNomeSnap || '—',
+            descricao: `Orçamento ${o.numero} · parcela ${p.numero}/${o.parcelas.length}`,
+            data: dataParaIso(o.data) as string,
+            dataPagamento: dataParaIso(p.dataVencimento ?? o.dataPagamento ?? null),
+            condicaoPagamento: null,
+            valor: centavosParaReais(p.valorCentavos),
+            pago: p.pago,
+          });
+        }
+      } else {
+        linhas.push({
+          id: `orc-${o.id}`,
+          tipo: 'orcamento',
+          docId: o.id,
+          parcelaId: null,
+          numero: o.numero,
+          empresa: o.clienteNomeSnap || '—',
+          descricao: `Orçamento ${o.numero}`,
+          data: dataParaIso(o.data) as string,
+          dataPagamento: dataParaIso(o.dataPagamento),
+          condicaoPagamento: o.dataPagamento ? null : o.condicaoPagamento ?? null,
+          valor: centavosParaReais(totalEfetivo(o)),
+          pago: o.statusPago,
+        });
+      }
+    }
+
+    for (const p of propostas) {
+      const rotulo = p.tipoContrato || 'Contrato';
+      if (p.parcelasContrato.length > 0) {
+        for (const pc of p.parcelasContrato) {
+          linhas.push({
+            id: `prop-${p.id}-${pc.id}`,
+            tipo: 'contrato',
+            docId: p.id,
+            parcelaId: pc.id,
+            numero: p.numero,
+            empresa: p.clienteNomeSnap || '—',
+            descricao: `${rotulo} ${p.numero} · mensalidade ${pc.numero}/${p.parcelasContrato.length}`,
+            data: dataParaIso(p.data) as string,
+            dataPagamento: dataParaIso(pc.dataVencimento ?? p.dataPagamento ?? null),
+            condicaoPagamento: null,
+            valor: centavosParaReais(pc.valorCentavos),
+            pago: pc.pago,
+          });
+        }
+      } else {
+        linhas.push({
+          id: `prop-${p.id}`,
+          tipo: 'contrato',
+          docId: p.id,
+          parcelaId: null,
+          numero: p.numero,
+          empresa: p.clienteNomeSnap || '—',
+          descricao: `${rotulo} ${p.numero}`,
+          data: dataParaIso(p.data) as string,
+          dataPagamento: dataParaIso(p.dataPagamento),
+          condicaoPagamento: null,
+          valor: centavosParaReais(totalEfetivo(p)),
+          pago: p.statusPago,
+        });
+      }
+    }
+
+    return linhas.sort((a, b) =>
+      (a.dataPagamento ?? '9999-12-31').localeCompare(b.dataPagamento ?? '9999-12-31'),
+    );
+  }
+
+  // Marca/desmarca como pago uma parcela (ou o documento inteiro, quando
+  // não há parcelamento) de orçamento ou contrato.
+  async marcarPagoConsolidado(
+    tipo: 'orcamento' | 'contrato',
+    docId: string,
+    pago: boolean,
+    parcelaId?: string | null,
+  ): Promise<{ ok: boolean }> {
+    const pagoEm = pago ? new Date() : null;
+    if (tipo === 'orcamento') {
+      const orc = await this.prisma.orcamento.findUnique({ where: { id: docId } });
+      if (!orc) throw new NotFoundException('Orçamento não encontrado');
+      if (parcelaId) {
+        const p = await this.prisma.parcela.findUnique({ where: { id: parcelaId } });
+        if (!p || p.orcamentoId !== docId) {
+          throw new NotFoundException('Parcela não encontrada');
+        }
+        await this.prisma.parcela.update({
+          where: { id: parcelaId },
+          data: { pago, pagoEm },
+        });
+      } else {
+        await this.prisma.orcamento.update({
+          where: { id: docId },
+          data: { statusPago: pago, ...(pago ? { statusAtrasado: false } : {}) },
+        });
+      }
+    } else {
+      const prop = await this.prisma.proposta.findUnique({ where: { id: docId } });
+      if (!prop) throw new NotFoundException('Proposta não encontrada');
+      if (parcelaId) {
+        const p = await this.prisma.parcelaContrato.findUnique({
+          where: { id: parcelaId },
+        });
+        if (!p || p.propostaId !== docId) {
+          throw new NotFoundException('Parcela não encontrada');
+        }
+        await this.prisma.parcelaContrato.update({
+          where: { id: parcelaId },
+          data: { pago, pagoEm },
+        });
+      } else {
+        await this.prisma.proposta.update({
+          where: { id: docId },
+          data: { statusPago: pago, ...(pago ? { statusAtrasado: false } : {}) },
+        });
+      }
+    }
+    return { ok: true };
   }
 
   // ===== Resumo financeiro (Dashboard + Fluxo de Caixa) =====
